@@ -20,10 +20,13 @@ set(Boost_USE_STATIC_LIBS OFF)
 
 set(Boost_USE_STATIC_RUNTIME OFF)
 find_package(Boost 1.60.0 COMPONENTS program_options thread log system REQUIRED)
+
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIRS})
 else(Boost_FOUND)
   message(FATAL_ERROR "Qute requires Boost version 1.60 or above.")
 endif (Boost_FOUND)
+
+find_package(Threads REQUIRED)
 
 add_subdirectory("src")
