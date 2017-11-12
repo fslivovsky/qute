@@ -12,7 +12,12 @@ else()
 endif ()
 
 set(Boost_USE_STATIC_LIBS OFF)
-set(Boost_USE_MULTITHREADED OFF)
+
+# On macOS + Homebrew, Boost only comes with libboost_thread-mt.a
+# but no libboost_thread.a. Not setting Boost_USE_MULTITHREADED seems
+# to fix the problem; see https://stackoverflow.com/a/15040393/3808537.
+# set(Boost_USE_MULTITHREADED ON)
+
 set(Boost_USE_STATIC_RUNTIME OFF)
 find_package(Boost 1.60.0 COMPONENTS program_options thread log system)
 if (Boost_FOUND)
