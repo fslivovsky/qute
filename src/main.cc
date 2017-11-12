@@ -298,7 +298,7 @@ int main(int argc, char** argv)
     lbool result = solver->solve();
 
     if (result != l_Undef && vm["partial-certificate"].as<bool>() && !learning_engine.reducedLast().empty()) {
-      cout << learning_engine.reducedLast() << "\n";
+      cout << "v " << learning_engine.reducedLast() << "0\n";
     }
 
     if (vm["print-stats"].as<bool>()) {
