@@ -125,7 +125,9 @@ inline void DecisionHeuristicVSIDSdeplearn::notifyBacktrack(uint32_t decision_le
 
 inline void DecisionHeuristicVSIDSdeplearn::bumpVariableScore(Variable v) {
   variable_activity[v] += score_increment;
-  variable_queue.update(v);
+  if (variable_queue.inHeap(v)) {
+    variable_queue.update(v);
+  }
   if (variable_activity[v] > 1e60) {
     rescaleVariableScores();
   }
@@ -134,7 +136,9 @@ inline void DecisionHeuristicVSIDSdeplearn::bumpVariableScore(Variable v) {
 inline void DecisionHeuristicVSIDSdeplearn::rescaleVariableScores() {
   for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
     variable_activity[v] *= 1e-60;
-    variable_queue.update(v);
+    if (variable_queue.inHeap(v)) {
+      variable_queue.update(v);
+    }
   }
   score_increment *= 1e-60;
 }
