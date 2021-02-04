@@ -1,6 +1,6 @@
 [submodule "minisat"]
 	path = minisat
-	url = git@github.com:niklasso/minisat.git
+	url = https://github.com/niklasso/minisat.git
 [submodule "docopt.cpp"]
 	path = docopt.cpp
 	url = https://github.com/docopt/docopt.cpp
