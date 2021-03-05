@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <iostream>
 
+#include "solver_types.hh"
+
 using std::vector;
 using std::unordered_set;
 using std::string;
@@ -16,7 +18,6 @@ using std::string;
 namespace Qute {
 
 class QCDCL_solver;
-enum ConstraintType;
 
 class DependencyManagerRRS: public DependencyManagerWatched {
 
