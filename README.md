@@ -7,10 +7,8 @@ Qute is a solver for quantified Boolean formulas (QBFs) based on quantified conf
 Use the following sequence of commands to clone the repository and build Qute:
 
 ```
-git clone https://github.com/perebor/qute.git
+git clone --recursive https://github.com/perebor/qute.git
 cd qute
-git submodule init
-git submodule update
 mkdir build
 cd build
 cmake ..
