@@ -3,6 +3,7 @@
 #include <csignal>
 #include <iostream>
 #include <string>
+#include <ctime>
 
 #include "main.hh"
 #include "logging.hh"
@@ -25,6 +26,7 @@
 #include "restart_scheduler_luby.hh"
 #include "standard_learning_engine.hh"
 #include "variable_data.hh"
+#include "three_watched_literal_propagator.hh"
 #include "watched_literal_propagator.hh"
 
 using namespace Qute;
@@ -64,6 +66,10 @@ General Options:
                                         (off | depqbf | weighted)
   --dependency-learning arg             dependency learning strategy
                                         (off | outermost | fewest | all) [default: all]
+  --watched-literals <int>              watched-literals scheme (out-of-order decisions require 3)
+                                        (2 | 3) [default: 2]
+  --out-of-order-decisions arg          lift the constraint that decisions should respect dependencies [default: off]
+                                        (off, existential, universal, all)
   --rrs arg                             toggle the use of the resolution-path dependency scheme
                                         (off | clauses | both) [default: off]
   --no-phase-saving                     deactivate phase saving
@@ -72,7 +78,9 @@ General Options:
   --partial-certificate                 output assignment to outermost block
   -v --verbose                          output information during solver run
   --print-stats                         print statistics on termination
+  --machine-readable                    print a machine-readable CSV line with comprehensive information instead of just the answer
   --trace                               output solver trace for certificate generation
+  -t --time-limit <double>              tell the solver to give up after this much time (in seconds) [default: 1e52]
 
 Weighted Model Generation Options:
   --exponent <double>                   exponent skewing the distribution of weights [default: 1]
@@ -140,6 +148,12 @@ int main(int argc, const char** argv)
   vector<string> model_generation_strategies = {"off", "depqbf", "weighted"};
   argument_constraints.push_back(make_unique<ListConstraint>(model_generation_strategies, "--model-generation"));
 
+  vector<string> watched_literal_schemes = {"2", "3"};
+  argument_constraints.push_back(make_unique<ListConstraint>(watched_literal_schemes, "--watched-literals"));
+
+  vector<string> out_of_order_decision_modes = {"off", "existential", "universal", "all"};
+  argument_constraints.push_back(make_unique<ListConstraint>(out_of_order_decision_modes, "--out-of-order-decisions"));
+
   vector<string> dependency_learning_strategies = {"off", "outermost", "fewest", "all"};
   argument_constraints.push_back(make_unique<ListConstraint>(dependency_learning_strategies, "--dependency-learning"));
 
@@ -186,7 +200,7 @@ int main(int argc, const char** argv)
   }
 
   // END Command Line Parameter Validation
-  solver = make_unique<QCDCL_solver>();
+  solver = make_unique<QCDCL_solver>(std::stod(args["--time-limit"].asString()));
 
   solver->options.trace = args["--trace"].asBool();
   unique_ptr<Tracer> tracer;
@@ -216,9 +230,9 @@ int main(int argc, const char** argv)
 
   unique_ptr<DependencyManagerWatched> dependency_manager;
   if (args["--rrs"].asString() == "off") {
-    dependency_manager = make_unique<DependencyManagerWatched>(*solver, args["--dependency-learning"].asString());
+    dependency_manager = make_unique<DependencyManagerWatched>(*solver, args["--dependency-learning"].asString(), args["--out-of-order-decisions"].asString());
   } else {
-    dependency_manager = make_unique<DependencyManagerRRS>(*solver, args["--dependency-learning"].asString());
+    dependency_manager = make_unique<DependencyManagerRRS>(*solver, args["--dependency-learning"].asString(), args["--out-of-order-decisions"].asString());
   }
   solver->dependency_manager = dependency_manager.get();
 
@@ -230,8 +244,8 @@ if (args["--dependency-learning"].asString() == "off") {
   decision_heuristic = make_unique<DecisionHeuristicVMTFdeplearn>(*solver, args["--no-phase-saving"].asBool());
 } else if (args["--decision-heuristic"].asString() == "VSIDS") {
   bool tiebreak_scores;
-  bool use_secondary_occurrences;
-  bool prefer_fewer_occurrences;
+  bool use_secondary_occurrences = false;
+  bool prefer_fewer_occurrences = false;
   if (args["--tiebreak"].asString() == "arbitrary") {
     tiebreak_scores = false;
   } else if (args["--tiebreak"].asString() == "more-primary") {
@@ -317,8 +331,13 @@ if (args["--dependency-learning"].asString() == "off") {
   StandardLearningEngine learning_engine(*solver, args["--rrs"].asString());
   solver->learning_engine = &learning_engine;
 
-  WatchedLiteralPropagator propagator(*solver);
-  solver->propagator = &propagator;
+  unique_ptr<Propagator> propagator;
+  if (args["--watched-literals"].asLong() == 2 && args["--out-of-order-decisions"].asString() == "off") {
+    propagator = make_unique<WatchedLiteralPropagator>(*solver);
+  } else {
+    propagator = make_unique<ThreeWatchedLiteralPropagator>(*solver);
+  }
+  solver->propagator = propagator.get();
 
   Parser parser(*solver, args["--model-generation"].asString() != "off");
 
@@ -330,6 +349,7 @@ if (args["--dependency-learning"].asString() == "off") {
       cerr << "qute: cannot access '" << filename << "': no such file or directory \n";
       return 2;
     } else {
+      solver->filename = filename;
       parser.readAUTO(ifs);
       ifs.close();
     }
@@ -369,7 +389,11 @@ if (args["--dependency-learning"].asString() == "off") {
   }
 
   if (!solver->options.trace) {
-    cout << (result == l_True ? "SAT\n" : result == l_False ? "UNSAT\n" : "UNDEF\n");
+    if (args["--machine-readable"].asBool()) {
+      solver->machineReadableSummary();
+    } else {
+      cout << solver->string_result[result] << std::endl;
+    }
   }
 
   if (args["--partial-certificate"].asBool() && ((result == l_True && !solver->variable_data_store->varType(1)) ||

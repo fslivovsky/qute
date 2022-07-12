@@ -93,7 +93,7 @@ inline void DecisionHeuristicVMTFdeplearn::clearOverflowQueue() {
   while (!overflow_queue.empty()) {
     auto variable = overflow_queue.top();
     auto watcher = solver.dependency_manager->watcher(variable);
-    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) && (solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before))) &&
+    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) && (solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before)) || solver.dependency_manager->isEligibleOOO(variable)) &&
          (decision_list[variable - 1].timestamp > decision_list[next_search - 1].timestamp)) {
       next_search = variable;
     }

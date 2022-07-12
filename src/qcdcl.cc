@@ -15,18 +15,22 @@
 
 namespace Qute {
 
+const string QCDCL_solver::string_result[3] = {"UNSAT", "SAT", "UNDEF"};
+
 using std::string;
 
-QCDCL_solver::QCDCL_solver(): variable_data_store(nullptr), constraint_database(nullptr), propagator(nullptr), decision_heuristic(nullptr), dependency_manager(nullptr), restart_scheduler(nullptr), learning_engine(nullptr), debug_helper(nullptr), birth_time(clock()), interrupt_flag(false) {}
+QCDCL_solver::QCDCL_solver(double time_limit): variable_data_store(nullptr), constraint_database(nullptr), propagator(nullptr), decision_heuristic(nullptr), dependency_manager(nullptr), restart_scheduler(nullptr), learning_engine(nullptr), debug_helper(nullptr), time_limit(time_limit), result(l_Undef), filename(""), interrupt_flag(false) {
+  t_birth = clock();
+}
 
 QCDCL_solver::~QCDCL_solver() {}
 
 void QCDCL_solver::addVariable(string original_name, char variable_type, bool auxiliary) {
-  bool var_type = (variable_type == 'a');
+  bool var_type = (variable_type == 'a'); // universal variables have var_type true
   variable_data_store->addVariable(original_name, var_type);
   propagator->addVariable();
   decision_heuristic->addVariable(auxiliary);
-  dependency_manager->addVariable(auxiliary);
+  dependency_manager->addVariable(auxiliary, var_type);
 }
 
 void QCDCL_solver::addConstraint(vector<Literal>& literals, ConstraintType constraint_type) {
@@ -42,7 +46,12 @@ void QCDCL_solver::addDependency(Variable of, Variable on) {
   }
 }
 
+void QCDCL_solver::notifyMaxVarDeclaration(Variable max_var) {}
+
+void QCDCL_solver::notifyNumClausesDeclaration(uint32_t max_var) {}
+
 lbool QCDCL_solver::solve() {
+  t_solve_begin = clock();
   constraint_database->notifyStart();
   dependency_manager->notifyStart();
   decision_heuristic->notifyStart();
@@ -50,7 +59,10 @@ lbool QCDCL_solver::solve() {
     tracer->notifyStart();
   }
   while (true) {
-    if (interrupt_flag) {
+    clock_t now = clock();
+    if (interrupt_flag || ((double)now - t_solve_begin) / CLOCKS_PER_SEC > time_limit) {
+      t_solve_end = now;
+      result = l_Undef;
       return l_Undef;
     }
     ConstraintType constraint_type;
@@ -67,13 +79,21 @@ lbool QCDCL_solver::solve() {
       bool constraint_learned;
       vector<Literal> conflict_side_literals;
       vector<uint32_t> premises;
-      learning_engine->analyzeConflict(conflict_constraint_reference, constraint_type, literal_vector, decision_level_backtrack_before, unit_literal, constraint_learned, conflict_side_literals, premises);
+      /* with out-of-order decisions we can learn "pseudo-asserting" (pseudo-unit after backtracking) constraints
+       * these are non-disabled constraints with a single unassigned primary literal, but such that there is an
+       * unassigned blocked secondary that prevents propagation. These constraints prevent branching on the primary
+       * variable, but do not enforce a value.
+       */
+      bool is_learned_constraint_unit = learning_engine->analyzeConflict(conflict_constraint_reference, constraint_type, literal_vector, decision_level_backtrack_before, unit_literal, constraint_learned, conflict_side_literals, premises);
       if (constraint_learned) {
+        solver_statistics.learned_total[constraint_type]++;
         if (literal_vector.empty()) {
           if (options.trace) {
             tracer->traceConstraint(literal_vector, constraint_type, premises);
           }
-          return lbool(constraint_type);
+          t_solve_end = clock();
+          result = lbool(constraint_type);
+          return result;
         } else {
           CRef learned_constraint_reference = constraint_database->addConstraint(literal_vector, constraint_type, true);
           auto& learned_constraint = constraint_database->getConstraint(learned_constraint_reference, constraint_type);
@@ -82,13 +102,19 @@ lbool QCDCL_solver::solve() {
           }
           decision_heuristic->notifyLearned(learned_constraint, constraint_type, conflict_side_literals);
           backtrackBefore(decision_level_backtrack_before);
-          assert(debug_helper->isUnit(learned_constraint, constraint_type));
-          enqueue(unit_literal ^ constraint_type, learned_constraint_reference);
+          if (is_learned_constraint_unit) {
+            assert(debug_helper->isUnit(learned_constraint, constraint_type));
+            enqueue(unit_literal ^ constraint_type, learned_constraint_reference);
+            solver_statistics.learned_asserting[constraint_type]++;
+          } else {
+            assert(!debug_helper->isUnit(learned_constraint, constraint_type));
+          }
           propagator->addConstraint(learned_constraint_reference, constraint_type);
           restart_scheduler->notifyLearned(learned_constraint);
-          solver_statistics.learned_total[constraint_type]++;
+          assert(is_learned_constraint_unit || !dependency_manager->isEligibleOOO(var(unit_literal)));
         }
       } else {
+        solver_statistics.backtracks_dep++;
         Variable unit_variable = var(unit_literal);
         dependency_manager->learnDependencies(unit_variable, literal_vector);
         auto decision_level_backtrack_before = variable_data_store->varDecisionLevel(unit_variable);
@@ -129,6 +155,7 @@ void QCDCL_solver::undoLast() {
 void QCDCL_solver::backtrackBefore(uint32_t target_decision_level) {
   solver_statistics.backtracks_total++;
   LOG(trace) << "Backtracking before decision level: " << target_decision_level << std::endl;
+  // WARNING: for out of order decisions to work properly, the following two notifications must be performed in this order
   propagator->notifyBacktrack(target_decision_level);
   decision_heuristic->notifyBacktrack(target_decision_level); // Target decision level must be passed to the VMTF decision heuristic.
   while (!variable_data_store->trailIsEmpty() && variable_data_store->decisionLevel() >= target_decision_level) {

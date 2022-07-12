@@ -11,13 +11,14 @@ void DecisionHeuristicVSIDSdeplearn::notifyUnassigned(Literal l) {
     Variable watcher = solver.dependency_manager->watcher(v);
     /* If variable will be unassigned after backtracking but its watcher still assigned,
       variable is eligible for assignment after backtracking. */
-    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) && solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before)) && !variable_queue.inHeap(v)) {
+    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) && solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before) || solver.dependency_manager->isEligibleOOO(v)) && !variable_queue.inHeap(v)) {
       variable_queue.insert(v);
     }
   }
 }
 
 Literal DecisionHeuristicVSIDSdeplearn::getDecisionLiteral() {
+  assert(allCandidatesInQueue());
   Variable candidate = 0;
   while (!variable_queue.empty() && !solver.dependency_manager->isDecisionCandidate(variable_queue[0])) {
     popFromVariableQueue();
@@ -31,6 +32,17 @@ Literal DecisionHeuristicVSIDSdeplearn::getDecisionLiteral() {
     saved_phase[candidate - 1] = phaseHeuristic(candidate);
   }
   return mkLiteral(candidate, saved_phase[candidate - 1]);
+}
+
+bool DecisionHeuristicVSIDSdeplearn::allCandidatesInQueue() {
+  bool noone_missing = true;
+  for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
+    if (solver.dependency_manager->isDecisionCandidate(v) && !variable_queue.inHeap(v)) {
+      std::cerr << "Ayayay, " << v << " is not in the heap!" << std::endl;
+      noone_missing = false;
+    }
+  }
+  return noone_missing;
 }
 
 }

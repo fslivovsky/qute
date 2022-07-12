@@ -15,15 +15,18 @@ void DecisionHeuristicVMTFdeplearn::addVariable(bool auxiliary) {
      * Each auxiliary is contained in a singleton list. */
     Variable old_last = decision_list[list_head - 1].prev;
     ListEntry new_entry;
+    Variable new_var = decision_list.size() + 1;
     if (!auxiliary) {
-      new_entry.next = list_head;
       new_entry.timestamp = 0;
+      new_entry.next = list_head;
       new_entry.prev = old_last;
-      decision_list[list_head - 1].prev = decision_list.size() + 1;
-      decision_list[old_last - 1].next = decision_list.size() + 1;
+      decision_list[list_head - 1].prev = new_var;
+      decision_list[old_last - 1].next = new_var;
+      // move the head so that later variables get higher timestamps
+      list_head = next_search = new_var;
     } else {
-      new_entry.next = decision_list.size() + 1;
-      new_entry.prev = decision_list.size() + 1;
+      new_entry.next = new_var;
+      new_entry.prev = new_var;
       new_entry.timestamp = 0;
     }
     decision_list.push_back(new_entry);
@@ -37,7 +40,7 @@ void DecisionHeuristicVMTFdeplearn::notifyUnassigned(Literal l) {
     /* If variable will be unassigned after backtracking but its watcher still assigned,
       variable is eligible for assignment after backtracking. If its timestamp is better
       than that of next_search, we must update next_search. */
-    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) && (solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before))) &&
+    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) && (solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before)) || solver.dependency_manager->isEligibleOOO(variable)) &&
         (decision_list[variable - 1].timestamp > decision_list[next_search - 1].timestamp)) {
       next_search = variable;
     }

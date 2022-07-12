@@ -12,7 +12,11 @@ StandardLearningEngine::StandardLearningEngine(QCDCL_solver& solver, string rrs_
   use_rrs_for_qtype[1] = (rrs_mode == "both");
 }
 
-void StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, vector<Literal>& literal_vector, uint32_t& decision_level_backtrack_before, Literal& unit_literal, bool& constraint_learned, vector<Literal>& conflict_side_literals, vector<uint32_t>& premises) {
+/* with the possibility of out-of-order decisions, it is not guaranteed that we learn a unit constraint
+ * we might also learn a "pseudo-unit" constraint: one whose "primary sub-constraint" (think existential sub-clause)
+ * is unit propositionally, but which is unconstrained on secondaries (other than not being disabled)
+ */
+bool StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, vector<Literal>& literal_vector, uint32_t& decision_level_backtrack_before, Literal& unit_literal, bool& constraint_learned, vector<Literal>& conflict_side_literals, vector<uint32_t>& premises) {
   Constraint& constraint = solver.constraint_database->getConstraint(conflict_constraint_reference, constraint_type);
   if (solver.options.trace) {
     premises.push_back(constraint.id());
@@ -50,10 +54,35 @@ void StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference,
       unit_literal = primary_assigned_last;
       constraint_learned = true;
       decision_level_backtrack_before = computeBackTrackLevel(primary_assigned_last, characteristic_function, rightmost_primary, constraint_type) + 1;
-      return;
+      // return value indicates that the constraint is unit
+      return true;
     }
     CRef reason_reference = solver.variable_data_store->varReason(var(primary_assigned_last));
-    assert(reason_reference != CRef_Undef);
+    if (reason_reference == CRef_Undef) {
+      /* we cannot resolve further, but we haven't learned an asserting constraint
+       * this is due to a decision on primary_assigned_last performed out of dependency order
+       * nevertheless, we learn this constraint, which should make primary_assigned_last ineligible
+       * for assignment. This kind of constraint is called pseudo-asserting.
+       * 
+       * In a correct implementation, a pseudo-asserting constraint is not contained in the
+       * constraint database yet, so the solver is guaranteed to make progress. Optional TODO:
+       * check that the learned constraint is indeed new (check that at least one resolution
+       * step was used to derive it, with the caveat that when learning from generated initial
+       * terms, no resolutions need necessarily be performed, and so that case has to be
+       * distinguished), for both debugging purposes, as well as for the sake of an alternative
+       * lazy implementation, which wouldn't keep track of OOO eligibility information, but
+       * would instead check here that the decision was sound (and if it wasn't, the solver
+       * would have to recover appropriately, taking care to avoid an infinite loop).
+       */
+      if (cfToLiteralVector(characteristic_function, literal_vector, rightmost_primary)) {
+        solver.solver_statistics.learned_tautological[constraint_type]++;
+      }
+      unit_literal = primary_assigned_last;
+      constraint_learned = true;
+      decision_level_backtrack_before = computeBackTrackLevelPseudoUnit(primary_assigned_last, characteristic_function, rightmost_primary, constraint_type) + 1;
+      // return value indicates that the constraint is *not* unit
+      return false;
+    }
     Constraint& reason = solver.constraint_database->getConstraint(reason_reference, constraint_type);
     if (reason.learnt) {
       solver.constraint_database->updateLBD(reason);
@@ -71,11 +100,13 @@ void StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference,
       // Illegal merge. Set return values and exit.
       unit_literal = primary_assigned_last;
       constraint_learned = false;
-      return;
+      return false;
     }
   }
   // The constraint represented by "characteristic_function" is empty, return.
   constraint_learned = true;
+  // return value immaterial here : the constraint is not unit, but we also don't care anymore
+  return false;
 }
 
 vector<bool> StandardLearningEngine::constraintToCf(Constraint& constraint, ConstraintType constraint_type, Literal& rightmost_primary) {
@@ -119,6 +150,15 @@ vector<uint32_t> StandardLearningEngine::getPrimaryLiteralDecisionLevelCounts(Co
   }
   return primary_decision_level_counts;
 }
+
+bool StandardLearningEngine::isPseudoAsserting(Literal last_literal, vector<bool>& characteristic_function, vector<uint32_t>& primary_literal_decision_level_counts, ConstraintType constraint_type) {
+  uint32_t decision_level_last_literal = solver.variable_data_store->varDecisionLevel(var(last_literal));
+  if (decision_level_last_literal == 0 || primary_literal_decision_level_counts[decision_level_last_literal] > 1 || solver.variable_data_store->decisionLevelType(decision_level_last_literal) != constraint_type) {
+    return false;
+  }
+  return true;
+}
+
 
 bool StandardLearningEngine::isAsserting(Literal last_literal, vector<bool>& characteristic_function, vector<uint32_t>& primary_literal_decision_level_counts, ConstraintType constraint_type) {
   uint32_t decision_level_last_literal = solver.variable_data_store->varDecisionLevel(var(last_literal));
@@ -189,6 +229,29 @@ void StandardLearningEngine::resolveAndReduce(vector<bool>& characteristic_funct
     // additionally, apply Drrs reduction
     solver.dependency_manager->reduceWithRRS(characteristic_function, rightmost_primary, constraint_type);
   }
+}
+
+/* computes the minimum possible decision level, such that undoing all greater decision levels will still guarantee that
+ * literal will be pseudo-unit (the only unassigned primary)
+ * the existence of such a decision level is assumed from the calling context
+ * (the constraint should not be disabled and it should have a unique primary with highest decision level)
+ *
+ * TODO: I don't see why this should use the characteristic function insead of the literal vector, which is already available in
+ * the calling context
+ */
+uint32_t StandardLearningEngine::computeBackTrackLevelPseudoUnit(Literal literal, vector<bool>& characteristic_function, Literal rightmost_primary, ConstraintType constraint_type) {
+  uint32_t backtrack_level = 0;
+  for (int i = Min_Literal_Int; i <= toInt(rightmost_primary); i++) {
+    Variable v = i >> 1;
+    if (characteristic_function[i] &&
+        toLiteral(i) != literal &&
+        solver.variable_data_store->isAssigned(v) &&
+        solver.variable_data_store->varDecisionLevel(v) > backtrack_level &&
+        solver.variable_data_store->varType(v) == constraint_type) {
+      backtrack_level = solver.variable_data_store->varDecisionLevel(v);
+    }
+  }
+  return backtrack_level;
 }
 
 uint32_t StandardLearningEngine::computeBackTrackLevel(Literal literal, vector<bool>& characteristic_function, Literal rightmost_primary, ConstraintType constraint_type) {

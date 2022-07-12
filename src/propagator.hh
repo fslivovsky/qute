@@ -15,6 +15,8 @@ public:
   virtual void notifyAssigned(Literal l) = 0;
   virtual void notifyBacktrack(uint32_t decision_level_before) = 0;
   virtual void relocConstraintReferences(ConstraintType constraint_type) = 0;
+  virtual bool phaseAdvice(Variable v) = 0;
+  virtual bool disablesConstraint(Literal l, ConstraintType constraint_type) = 0;
 
 };
 

@@ -68,6 +68,9 @@ void Parser::readQDIMACS(istream& ifs) {
     ifs >> max_var;
     ifs >> num_clauses;
 
+    pcnf.notifyMaxVarDeclaration(max_var);
+    pcnf.notifyNumClausesDeclaration(num_clauses);
+
     // this calls the internal wrapper around std::getline, which also updates current_line
     current_line = 1;
     getline(ifs, line);
@@ -101,6 +104,9 @@ void Parser::readQDIMACS(istream& ifs) {
             vars_seen++;
             if (current_var < 0 || current_var > max_var) {
                 variable_out_of_bounds_error(current_var);
+            }
+            if (var_conversion_map[current_var] != 0) {
+              duplicate_variable_error(current_var);
             }
             var_conversion_map[current_var] = vars_seen;
             pcnf.addVariable(std::to_string(current_var), current_qtype, false);

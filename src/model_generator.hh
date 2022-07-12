@@ -3,11 +3,10 @@
 
 #include <vector>
 
-#include "solver_types.hh"
-
 namespace Qute {
 
 class QCDCL_solver;
+class Literal;
 
 class ModelGenerator {
   public:

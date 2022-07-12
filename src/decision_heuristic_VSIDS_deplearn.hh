@@ -37,6 +37,7 @@ protected:
   void decayVariableScores();
   Variable popFromVariableQueue();
   double getBestDecisionVariableScore();
+  bool allCandidatesInQueue();
   vector<Variable> getVariablesWithTopScore();
   void popVariableWithTopScore(Variable v);
   Variable pickVarUsingOccurrences(vector<Variable>& candidates, bool prefer_fewer_occurrences);
@@ -87,6 +88,11 @@ inline void DecisionHeuristicVSIDSdeplearn::precomputeVariableOccurrences(bool u
 inline void DecisionHeuristicVSIDSdeplearn::addVariable(bool auxiliary) {
   saved_phase.push_back(l_Undef);
   variable_activity.insert(solver.variable_data_store->lastVariable(), 0);
+  /* TODO: initialize with a biased activity that favours later variables
+   * like 1 - 1/v
+   * or   1 - 1/depth(v)
+   *   (for this, move depth information from VMTF_prefix to variable_data)
+   */
   is_auxiliary.push_back(auxiliary);
 }
 

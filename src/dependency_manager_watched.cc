@@ -6,7 +6,7 @@
 
 namespace Qute {
 
-DependencyManagerWatched::DependencyManagerWatched(QCDCL_solver& solver, string dependency_learning_strategy): learnDependenciesPtr(nullptr), solver(solver), prefix_mode(false) {
+DependencyManagerWatched::DependencyManagerWatched(QCDCL_solver& solver, string dependency_learning_strategy, string out_of_order_decisions): learnDependenciesPtr(nullptr), solver(solver), prefix_mode(false) {
   if (dependency_learning_strategy == "off") {
     prefix_mode = true;
   } else if (dependency_learning_strategy == "all") {
@@ -15,6 +15,19 @@ DependencyManagerWatched::DependencyManagerWatched(QCDCL_solver& solver, string 
     learnDependenciesPtr = &DependencyManagerWatched::learnOutermostDependency;
   } else if (dependency_learning_strategy == "fewest") {
     learnDependenciesPtr = &DependencyManagerWatched::learnDependencyWithFewestDependencies;
+  }
+  if (out_of_order_decisions == "all") {
+    this->out_of_order_decisions[0] = true;
+    this->out_of_order_decisions[1] = true;
+  } else if (out_of_order_decisions == "existential") {
+    this->out_of_order_decisions[0] = true;
+    this->out_of_order_decisions[1] = false;
+  } else if (out_of_order_decisions == "universal") {
+    this->out_of_order_decisions[0] = false;
+    this->out_of_order_decisions[1] = true;
+  } else {
+    this->out_of_order_decisions[0] = false;
+    this->out_of_order_decisions[1] = false;
   }
 }
 
@@ -110,7 +123,14 @@ void DependencyManagerWatched::setWatchedDependency(Variable variable, Variable 
   variables_watched_by[new_watched - 1].push_back(variable);
 }
 
+uint32_t DependencyManagerWatched::varAEL(Variable v) {
+  return AEL[v-1];
+}
+
 bool DependencyManagerWatched::isDecisionCandidate(Variable v) const {
+  if (solver.variable_data_store->isAssigned(v)) {
+    return false;
+  }
   if (prefix_mode) { // This is fairly inefficient in prefix mode and only included for purposes of debugging.
     if (solver.variable_data_store->isAssigned(v)) {
       return false;
@@ -124,7 +144,10 @@ bool DependencyManagerWatched::isDecisionCandidate(Variable v) const {
       return true;
     }
   } else {
-    return !solver.variable_data_store->isAssigned(v) && (watcher(v) == 0 || solver.variable_data_store->isAssigned(watcher(v)));
+    if (watcher(v) == 0 || solver.variable_data_store->isAssigned(watcher(v))) {
+      return true;
+    }
+    return isEligibleOOO(v);
   }
 }
 
@@ -140,4 +163,76 @@ bool DependencyManagerWatched::findWatchedDependency(Variable variable, bool rem
   return false;
 }
 
+// TODO: use MiniSAT::Heap to store AET and perform setVariableAEL and markPermanentlyUnassignable faster
+void DependencyManagerWatched::markVarPermanentlyUnassignable(Variable v) {
+  /* mark only, removal from AET takes place upon backtracking if necessary
+   */
+  if (!is_auxiliary[v-1]) {
+    AEL[v-1] = PERMANENTLY_INELIGIBLE;
+  }
 }
+
+/* we need to maintain the invariant that AET is sorted in increasing AEL
+ * order, otherwise backtracking stops working */
+void DependencyManagerWatched::setVariableAEL(Variable v, uint32_t level) {
+  if (!is_auxiliary[v-1] && AEL[v-1] > level) { // we don't have to do anything if current AEL is lower or equal
+    if (AEL[v-1] == ELIGIBLE) {
+      // v is not on AET
+      size_t i = AET.size();
+      AET.push_back(v);
+      while (i > 0 && AEL[AET[i-1]-1] > level) {
+        AET[i] = AET[i-1];
+        --i;
+      }
+      AET[i] = v;
+      AEL[v-1] = level;
+    } else if (AEL[v-1] != PERMANENTLY_INELIGIBLE) {
+      // v is already on AET
+      size_t i = AET.size() - 1;
+      while (AET[i] != v) {--i;}
+      while (i > 0 && AEL[AET[i-1]-1] > level) {
+        AET[i] = AET[i-1];
+        --i;
+      }
+      AET[i] = v;
+      AEL[v-1] = level;
+    } // else v is permanently unassignable
+  }
+}
+
+void DependencyManagerWatched::markVarUnassignable(Variable v) {
+  if (!is_auxiliary[v-1]) {
+    setVariableAEL(v, solver.variable_data_store->decisionLevel());
+  }
+}
+
+/* safe to undo everything if necessary, permanently out-of-order ineligible
+ * variables are not even stored on AET
+ */
+void DependencyManagerWatched::backtrackAET(uint32_t backtrack_level) {
+  while (!AET.empty()) {
+    Variable v = AET.back();
+    if (AEL[v-1] >= backtrack_level) {
+      AET.pop_back();
+      if (AEL[v-1] != PERMANENTLY_INELIGIBLE) {
+        AEL[v-1] = ELIGIBLE;
+        solver.decision_heuristic->notifyEligible(v);
+      }
+    } else {
+      break;
+    }
+  }
+};
+
+void DependencyManagerWatched::notifyStart() {}
+
+inline bool DependencyManagerWatched::dependsOn(Variable of, Variable on) const {
+  if (prefix_mode) {
+    return on < of && solver.variable_data_store->varType(of) != solver.variable_data_store->varType(on);
+  } else {
+    return variable_dependencies[of - 1].dependent_on.find(on) != variable_dependencies[of - 1].dependent_on.end();
+  }
+}
+
+}
+

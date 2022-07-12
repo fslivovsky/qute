@@ -1,5 +1,5 @@
-#ifndef watched_literal_propagator_hh
-#define watched_literal_propagator_hh
+#ifndef three_watched_literal_propagator_hh
+#define three_watched_literal_propagator_hh
 
 #include <vector>
 #include <algorithm>
@@ -14,13 +14,13 @@ namespace Qute {
 
 class QCDCL_solver;
 
-class WatchedLiteralPropagator: public Propagator {
+class ThreeWatchedLiteralPropagator: public Propagator {
   friend class DecisionHeuristic;
   friend class ModelGeneratorSimple;
   friend class ModelGeneratorWeighted;
 
 public:
-  WatchedLiteralPropagator(QCDCL_solver& solver);
+  ThreeWatchedLiteralPropagator(QCDCL_solver& solver);
   virtual void addVariable();
   virtual CRef propagate(ConstraintType& constraint_type);
   virtual void addConstraint(CRef constraint_reference, ConstraintType constraint_type);
@@ -34,14 +34,27 @@ protected:
   uint32_t findFirstWatcher(Constraint& constraint, ConstraintType constraint_type);
   uint32_t findSecondWatcher(Constraint& constraint, ConstraintType constraint_type);
   bool isUnassignedOrDisablingPrimary(Literal literal, ConstraintType constraint_type);
+  bool isUnassignedOrDisablesConstraint(Literal literal, ConstraintType constraint_type);
   bool isBlockedOrDisablingSecondary(Literal literal, ConstraintType constraint_type, Literal primary);
-  bool constraintIsWatchedByLiteral(Constraint& constraint, Literal l);
+  inline bool constraintIsWatchedByLiteral(Constraint& constraint, ConstraintType _constraint_type, Literal watcher);
   bool propagateUnwatched(CRef constraint_reference, ConstraintType constraint_type, bool& watchers_found);
   bool isDisabled(Constraint& constraint, ConstraintType constraint_type);
   bool isUnassignedPrimary(Literal literal, ConstraintType constraint_type);
   bool isBlockedSecondary(Literal literal, ConstraintType constraint_type, Literal primary);
   bool updateWatchedLiterals(Constraint& constraint, CRef constraint_reference, ConstraintType constraint_type, bool& watcher_changed);
   bool propagationCorrect();
+
+  size_t findPrimaryWatcher(Constraint& constraint, ConstraintType constraint_type, size_t begin);
+  size_t findSecondaryWatcher(Constraint& constraint, ConstraintType constraint_type, size_t first_secondary_index);
+  int initWatchers(Constraint& constraint, CRef constraint_reference, ConstraintType constraint_type);
+  bool enforceWatcherConsistency(Constraint& constraint, CRef constraint_reference, ConstraintType constraint_type, Literal last_assigned_literal, bool& watcher_changed);
+
+  inline bool isPrimary(Literal literal, ConstraintType constraint_type);
+  inline bool isAssigned(Literal literal);
+  inline bool dependsOn(Literal who_depends_on_other, Literal who_is_depended_on);
+  inline uint32_t decLevel(Literal l);
+
+  void primariesToFront(Constraint& constraint, ConstraintType constraint_type);
 
   struct WatchedRecord
   {
@@ -60,13 +73,16 @@ protected:
   QCDCL_solver& solver;
 
   vector<Literal> propagation_queue;
-  vector<vector<WatchedRecord>> constraints_watched_by[2];
-  vector<CRef> constraints_without_two_watchers[2];
 
+  // we need to (?) distinguish between whether the watcher is primary or not
+  vector<vector<WatchedRecord>> constraints_watched_by[2]; // constraints with at least 2 existential (presence of universals is irrelevant)
+  vector<CRef> constraints_without_two_watchers[2]; // size-1 constraints can go here if necessary
+
+  inline void watchConstraint(ConstraintType constraint_type, CRef constraint_reference, Literal watcher, Literal cowatcher);
 };
 
 // Implementation of inline methods.
-inline void WatchedLiteralPropagator::addVariable() {
+inline void ThreeWatchedLiteralPropagator::addVariable() {
   for (ConstraintType constraint_type: constraint_types) {
     // Add entries for both literals.
     constraints_watched_by[constraint_type].emplace_back();
@@ -79,12 +95,8 @@ inline void WatchedLiteralPropagator::addVariable() {
 //   constraint.mark();
 // }
 
-inline void WatchedLiteralPropagator::notifyAssigned(Literal l) {
+inline void ThreeWatchedLiteralPropagator::notifyAssigned(Literal l) {
   propagation_queue.push_back(l);
-}
-
-inline void WatchedLiteralPropagator::notifyBacktrack(uint32_t decision_level_before) {
-  propagation_queue.clear();
 }
 
 }

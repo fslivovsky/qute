@@ -44,73 +44,80 @@ public:
     void readQDIMACS(std::istream& ifs = std::cin);
     void writeQDIMACS();
 
+    const string error_header = "qute error: ";
+
     inline void unexpected_char_error(const char c, size_t col) {
-        std::cerr << "Error: Unexpected character '" << c << "' at line " << current_line << " column " << col << std::endl;
+        std::cerr << error_header << "Unexpected character '" << c << "' at line " << current_line << " column " << col << std::endl;
         exit(1);
     }
 
     inline void unexpected_eol_error() {
-        std::cerr << "Error: Unexpected end of line at line " << current_line << std::endl;
+        std::cerr << error_header << "Unexpected end of line at line " << current_line << std::endl;
         exit(1);
     }
 
     inline void empty_identifier_error() {
-        std::cerr << "Error: Empty identifier at line " << current_line << std::endl;
+        std::cerr << error_header << "Empty identifier at line " << current_line << std::endl;
         exit(1);
     }
 
     inline void unknown_identifier_error(const std::string& identifier) {
-        std::cerr << "Error: Unknown identifier '" << identifier << "' at line " << current_line << std::endl;
+        std::cerr << error_header << "Unknown identifier '" << identifier << "' at line " << current_line << std::endl;
         exit(1);
     }
 
     inline void variable_out_of_bounds_error(int32_t variable) {
         if (variable < 0) {
-            std::cerr << "Error: Variable " << variable << " must be positive at line " << current_line << std::endl;
+            std::cerr << error_header << "Variable " << variable << " must be positive at line " << current_line << std::endl;
         }
         else {
-            std::cerr << "Error: Variable " << variable << " exceeds maximum declared variable at line " << current_line << std::endl;
+            std::cerr << error_header << "Variable " << variable << " exceeds maximum declared variable at line " << current_line << std::endl;
         }
         exit(1);
     }
 
     inline void free_variable_error(int32_t literal) {
-        std::cerr << "Error: Qute does not currently support free variables (" << literal << " at line " << current_line << " is free), please bind all variables in the prefix." << std::endl;
+        std::cerr << error_header << "Qute does not currently support free variables (" << literal << " at line " << current_line << " is free), please bind all variables in the prefix." << std::endl;
         exit(1);
     }
 
+    inline void duplicate_variable_error(int32_t variable) {
+      std::cerr << error_header << "Duplicate variable " << variable << " at line " << current_line << std::endl;
+      exit(1);
+    }
+
     inline void duplicate_qcir_output_gate_error() {
-        std::cerr << "Error: Duplicate output gate at line " << current_line << std::endl;
+        std::cerr << error_header << "Duplicate output gate at line " << current_line << std::endl;
         exit(1);
     }
 
     inline void invalid_gate_type_error(const string& gate_type) {
-        std::cerr << "Error: Unknown gate type '" << gate_type << "' at line " << current_line << std::endl;
+        std::cerr << error_header << "Unknown gate type '" << gate_type << "' at line " << current_line << std::endl;
         exit(1);
     }
 
     inline void output_gate_missing_error() {
-        std::cerr << "Error: Output gate missing!" << std::endl;
+        std::cerr << error_header << "Output gate missing!" << std::endl;
         exit(1);
     }
 
     inline void duplicate_qcir_gate_error(const string& gate_name) {
-        std::cerr << "Error: Duplicate gate definition. Variable '" << gate_name << "' already exists (line "  << current_line << ")" << std::endl;
+        std::cerr << error_header << "Duplicate gate definition. Variable '" << gate_name << "' already exists (line "  << current_line << ")" << std::endl;
         exit(1);
     }
 
     inline void undeclared_gate_input_literal_error(const string& input) {
-        std::cerr << "Error: Undeclared gate input literal '" << input << "' at line " << current_line << std::endl;
+        std::cerr << error_header << "Undeclared gate input literal '" << input << "' at line " << current_line << std::endl;
         exit(1);
     }
 
     inline void invalid_xor_gate_size_error() {
-        std::cerr << "Error: The XOR gate at line " << current_line << " must have exactly 2 inputs" << std::endl;
+        std::cerr << error_header << "The XOR gate at line " << current_line << " must have exactly 2 inputs" << std::endl;
         exit(1);
     }
 
     inline void invalid_ite_gate_size_error() {
-        std::cerr << "Error: The ITE gate at line " << current_line << " must have exactly 3 inputs" << std::endl;
+        std::cerr << error_header << "The ITE gate at line " << current_line << " must have exactly 3 inputs" << std::endl;
         exit(1);
     }
 

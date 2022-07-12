@@ -10,6 +10,17 @@
 
 namespace Qute {
 
+inline bool WatchedLiteralPropagator::phaseAdvice(Variable v) {
+  bool var_type = solver.variable_data_store->varType(v);
+  if (!var_type) {
+    return constraints_watched_by[ConstraintType::clauses][toInt(mkLiteral(v, false))].size() <
+           constraints_watched_by[ConstraintType::clauses][toInt(mkLiteral(v, true))].size();
+  } else {
+    return constraints_watched_by[ConstraintType::terms][toInt(mkLiteral(v, true))].size() <
+           constraints_watched_by[ConstraintType::terms][toInt(mkLiteral(v, false))].size();
+  }
+}
+
 WatchedLiteralPropagator::WatchedLiteralPropagator(QCDCL_solver& solver): solver(solver), constraints_watched_by{vector<vector<WatchedRecord>>(2), vector<vector<WatchedRecord>>(2)} {}
 
 CRef WatchedLiteralPropagator::propagate(ConstraintType& constraint_type) {
@@ -43,6 +54,7 @@ CRef WatchedLiteralPropagator::propagate(ConstraintType& constraint_type) {
       vector<WatchedRecord>& record_vector = constraints_watched_by[_constraint_type][toInt(watcher)];
       vector<WatchedRecord>::iterator i, j;
       for (i = j = record_vector.begin(); i != record_vector.end(); ++i) {
+        ++solver.solver_statistics.watched_list_accesses;
         WatchedRecord& record = *i;
         CRef constraint_reference = record.constraint_reference;
         Literal blocker = record.blocker;
@@ -60,6 +72,7 @@ CRef WatchedLiteralPropagator::propagate(ConstraintType& constraint_type) {
               return constraint_reference;
             }
           } else {
+            ++solver.solver_statistics.spurious_watch_events;
             watcher_changed = true;
           }
         }
@@ -265,7 +278,7 @@ bool WatchedLiteralPropagator::isBlockedOrDisablingSecondary(Literal literal, Co
   return ((solver.variable_data_store->varType(var(literal)) != constraint_type && solver.dependency_manager->dependsOn(var(primary), var(literal))) &&
           (!solver.variable_data_store->isAssigned(var(literal)) ||
            (solver.variable_data_store->assignment(var(literal)) == sign(literal)) == disablingPolarity(constraint_type) ||
-           ((solver.variable_data_store->assignment(var(primary)) == sign(literal)) == disablingPolarity(constraint_type) &&
+           ((solver.variable_data_store->assignment(var(primary)) == sign(primary)) == disablingPolarity(constraint_type) &&
             solver.variable_data_store->varDecisionLevel(var(primary)) <= solver.variable_data_store->varDecisionLevel(var(literal)))));
 }
 

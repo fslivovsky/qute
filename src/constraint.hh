@@ -48,6 +48,11 @@ struct Constraint
   Literal* begin() { return &data[0].lit; }
   Literal* end() { return &data[constraint_size].lit; }
 
+  Literal  last() { return data[constraint_size-1].lit; }
+
+  void swapLits(size_t i, size_t j) { std::swap(data[i], data[j]); }
+  void swapToEnd(size_t i) { swapLits(i, constraint_size-1); }
+
   bool         isMarked    ()      const   { return marked; }
   void         mark        ()              { marked = 1; }
   void         unmark      ()              { marked = 0; }

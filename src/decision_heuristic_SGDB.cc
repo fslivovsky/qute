@@ -12,7 +12,7 @@ void DecisionHeuristicSGDB::notifyUnassigned(Literal l) {
     Variable watcher = solver.dependency_manager->watcher(v);
     /* If variable will be unassigned after backtracking but its watcher still assigned,
       variable is eligible for assignment after backtracking. */
-    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) && solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before))) {
+    if ((watcher == 0 || (solver.variable_data_store->isAssigned(watcher) && solver.variable_data_store->varDecisionLevel(watcher) < backtrack_decision_level_before) || solver.dependency_manager->isEligibleOOO(v))) {
       auto variable_type = solver.variable_data_store->varType(v);
       if (variable_type) {
         universal_queue.update(v);

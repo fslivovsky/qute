@@ -12,7 +12,7 @@ namespace Qute {
 using std::priority_queue;
 using std::unordered_map;
 
-DependencyManagerRRS::DependencyManagerRRS(QCDCL_solver& solver, string dependency_learning_strategy): DependencyManagerWatched(solver, dependency_learning_strategy) {
+DependencyManagerRRS::DependencyManagerRRS(QCDCL_solver& solver, string dependency_learning_strategy, string out_of_order_decisions): DependencyManagerWatched(solver, dependency_learning_strategy, out_of_order_decisions) {
 }
 
 void DependencyManagerRRS::filterIndependentVariables(Variable unit_variable, vector<Literal>& literal_vector) {

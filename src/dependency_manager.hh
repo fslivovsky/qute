@@ -9,7 +9,7 @@ class DependencyManager {
 
 public:
   virtual ~DependencyManager() {}
-  virtual void addVariable(bool auxiliary) = 0;
+  virtual void addVariable(bool auxiliary, bool qtype) = 0;
   virtual void addDependency(Variable of, Variable on) = 0;
   virtual void notifyStart() = 0;
   virtual void notifyAssigned(Variable v) = 0;

@@ -107,15 +107,8 @@ bool DecisionHeuristic::invJeroslowWang(Variable v) {
   }
 }
 
-bool DecisionHeuristic::watcherPhaseHeuristic(Variable v) {
-  bool var_type = solver.variable_data_store->varType(v);
-  if (!var_type) {
-    return solver.propagator->constraints_watched_by[ConstraintType::clauses][toInt(mkLiteral(v, false))].size() <
-           solver.propagator->constraints_watched_by[ConstraintType::clauses][toInt(mkLiteral(v, true))].size();
-  } else {
-    return solver.propagator->constraints_watched_by[ConstraintType::terms][toInt(mkLiteral(v, true))].size() <
-           solver.propagator->constraints_watched_by[ConstraintType::terms][toInt(mkLiteral(v, false))].size();
-  }
+inline bool DecisionHeuristic::watcherPhaseHeuristic(Variable v) {
+  return solver.propagator->phaseAdvice(v);
 }
 
 double DecisionHeuristic::invJeroslowWangScore(Literal l, ConstraintType constraint_type) {

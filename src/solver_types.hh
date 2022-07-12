@@ -86,6 +86,10 @@ public:
     bool operator!=(const TrailIterator& ti) const { return lits != ti.lits; }
 };
 
+inline Literal disablingLiteral(Literal l, ConstraintType constraint_type) {
+  return l ^ constraint_type;
+}
+
 inline bool disablingPolarity(ConstraintType constraint_type) {
   return !constraint_type;
 }

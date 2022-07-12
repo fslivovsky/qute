@@ -4,6 +4,7 @@
 #include "pcnf_container.hh"
 #include <vector>
 #include <iostream>
+#include <iomanip>
 
 using std::cout;
 
@@ -12,7 +13,7 @@ namespace Qute {
 class Tracer;
 class DecisionHeuristic;
 class DependencyManagerWatched;
-class WatchedLiteralPropagator;
+class Propagator;
 class StandardLearningEngine;
 class VariableDataStore;
 class ConstraintDB;
@@ -23,22 +24,25 @@ class RestartScheduler;
 class QCDCL_solver: public PCNFContainer {
 
 public:
-  QCDCL_solver();
+  QCDCL_solver(double time_limit);
   virtual ~QCDCL_solver();
   // Methods required by PCNFContainer.
   virtual void addVariable(string original_name, char variable_type, bool auxiliary);
   virtual void addConstraint(std::vector<Literal>& literals, ConstraintType constraint_type);
   virtual void addDependency(Variable of, Variable on);
+  virtual void notifyMaxVarDeclaration(Variable max_var);
+  virtual void notifyNumClausesDeclaration(uint32_t num_clauses);
 
   lbool solve();
   void interrupt();
   bool enqueue(Literal l, CRef reason);
   void printStatistics();
+  void machineReadableSummary();
 
   // Subsystems.
   VariableDataStore* variable_data_store;
   ConstraintDB* constraint_database;
-  WatchedLiteralPropagator* propagator;
+  Propagator* propagator;
   ModelGenerator* model_generator;
   DecisionHeuristic* decision_heuristic;
   DependencyManagerWatched* dependency_manager;
@@ -56,6 +60,7 @@ public:
     uint32_t nr_assignments = 0;
     uint32_t learned_total[2] = {0, 0};
     uint32_t learned_tautological[2] = {0, 0};
+    uint32_t learned_asserting[2] = {0, 0};
     uint32_t nr_dependencies = 0;
     uint32_t nr_independencies = 0;
     uint32_t nr_RRS_reduced_lits = 0;
@@ -63,6 +68,8 @@ public:
     clock_t  time_spent_reducing_by_RRS = 0;
     uint32_t initial_terms_generated = 0;
     double   average_initial_term_size = 0;
+    uint64_t watched_list_accesses = 0;
+    uint64_t spurious_watch_events = 0;
   } solver_statistics;
 
   struct SolverOptions
@@ -71,7 +78,13 @@ public:
     bool print_stats = false;
   } options;
 
-  clock_t birth_time;
+  double time_limit; // in seconds; limitless solving is simulated by a high time limit (default 1e52)
+  clock_t t_birth;
+  clock_t t_solve_begin;
+  clock_t t_solve_end;
+  lbool result;
+  string filename;
+  static const string string_result[3];
 
 protected:
   void undoLast();
@@ -96,8 +109,10 @@ inline void QCDCL_solver::interrupt() {
 inline void QCDCL_solver::printStatistics() {
   cout << "Number of learned clauses: " << solver_statistics.learned_total[false] <<  "\n";
   cout << "Number of learned tautological clauses: " << solver_statistics.learned_tautological[false] <<  "\n";
+  cout << "Number of learned    asserting clauses: " << solver_statistics.learned_asserting[false] <<  "\n";
   cout << "Number of learned terms: " << solver_statistics.learned_total[true] << "\n";
   cout << "Number of learned contradictory terms: " << solver_statistics.learned_tautological[true] << "\n";
+  cout << "Number of learned     asserting terms: " << solver_statistics.learned_asserting[true] <<  "\n";
   if (solver_statistics.nr_assignments) {
     cout << "Fraction of decisions among assignments: " << double(solver_statistics.nr_decisions) / double(solver_statistics.nr_assignments) << "\n";
   }
@@ -113,6 +128,40 @@ inline void QCDCL_solver::printStatistics() {
   }
   cout << "Number of initial terms generated: " << solver_statistics.initial_terms_generated << std::endl;
   cout << "Average initial term size: " << solver_statistics.average_initial_term_size << std::endl;
+}
+
+inline void QCDCL_solver::machineReadableSummary() {
+
+  double solve_time = (double)(t_solve_end - t_solve_begin) / CLOCKS_PER_SEC;
+  double total_time = (double)(clock() - t_birth) / CLOCKS_PER_SEC;
+
+  /*double bps = solver_statistics.backtracks_total / solve_time;
+  double wps = solver_statistics.watched_list_accesses / solve_time;
+  double swe = solver_statistics.spurious_watch_events / (double)solver_statistics.watched_list_accesses * 100;*/
+  double ass_lrn_frac[2];
+  double ass_lrn_mod[2] = {static_cast<double>(result == l_False), static_cast<double>(result == l_True)}; // make the empty constraint count as asserting
+  for (ConstraintType ct : constraint_types) {
+    if (solver_statistics.learned_total[ct] > 0) {
+      ass_lrn_frac[ct] = (solver_statistics.learned_asserting[ct] + ass_lrn_mod[ct]) / solver_statistics.learned_total[ct];
+    } else {
+      ass_lrn_frac[ct] = -1;
+    }
+  }
+
+  std::cout << "QUTE_ANS,"
+    << filename << ","
+    << string_result[result] << ","
+    << std::setprecision(4)
+    << solve_time << ","
+    << total_time << ","
+    << ass_lrn_frac[ConstraintType::clauses] << ","
+    << ass_lrn_frac[ConstraintType::terms] << ","
+    << solver_statistics.learned_total[ConstraintType::clauses] << ","
+    << solver_statistics.learned_total[ConstraintType::terms] << ","
+    << solver_statistics.learned_asserting[ConstraintType::clauses] << ","
+    << solver_statistics.learned_asserting[ConstraintType::terms]
+    << std::endl;
+
 }
 
 }
