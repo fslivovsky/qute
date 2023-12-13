@@ -224,8 +224,14 @@ void StandardLearningEngine::resolveAndReduce(vector<bool>& characteristic_funct
       }
     }
     for (Literal l: secondary_literals_reason) {
-      characteristic_function[toInt(l)] = l < rightmost_primary;
+      if (l < rightmost_primary) {
+        characteristic_function[toInt(l)] = true;
+      } else {
+        characteristic_function[toInt(l)] = false;
+        reduced_last[var(l)] = sign(l);
+      }
     }
+
     // additionally, apply Drrs reduction
     solver.dependency_manager->reduceWithRRS(characteristic_function, rightmost_primary, constraint_type);
   }
@@ -277,7 +283,7 @@ string StandardLearningEngine::reducedLast() {
   if (solver.variable_data_store->lastVariable() > 0) {
     bool first_type =  solver.variable_data_store->varType(1);
     for (Variable v = 1; v <= solver.variable_data_store->lastVariable() && solver.variable_data_store->varType(v) == first_type; v++) {
-      out_string += (reduced_last[v] ? "" : "-");
+      out_string += ((reduced_last[v] != first_type) ? "" : "-");
       out_string += solver.variable_data_store->originalName(v);
       out_string += " ";
     }

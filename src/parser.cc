@@ -1,5 +1,4 @@
 #include "parser.hh"
-#include <vector>
 #include <algorithm>
 #include <assert.h>
 #include <stdexcept>
@@ -178,6 +177,7 @@ void Parser::readQCIR(istream& ifs) {
     nr_vars = 0;
     current_line = 0;
     string qcir_output_clause_var = "", qcir_output_term_var = "";
+    bool qcir_output_polarity = true;
 
     bool is_prefix_line;
     vector<string> inputs;
@@ -210,7 +210,11 @@ void Parser::readQCIR(istream& ifs) {
                 if (qcir_output_clause_var != "") {
                     duplicate_qcir_output_gate_error();
                 }
-                string name = extract_next(line, ++idx, ")");
+                string name = extract_lit(line, ++idx);
+                if (name[0] == '-') {
+                  qcir_output_polarity = false;
+                  name = name.substr(1);
+                }
                 qcir_output_clause_var = name + ".e";
                 qcir_output_term_var = name + ".a";
             } else {
@@ -249,8 +253,8 @@ void Parser::readQCIR(istream& ifs) {
     if (qcir_output_clause_var == "") {
         output_gate_missing_error();
     }
-    vector<Literal> output_clause{mkLiteral(qcir_var_conversion_map.at(qcir_output_clause_var), true)};
-    vector<Literal> output_term{mkLiteral(qcir_var_conversion_map.at(qcir_output_term_var), true)};
+    vector<Literal> output_clause{mkLiteral(qcir_var_conversion_map.at(qcir_output_clause_var), qcir_output_polarity)};
+    vector<Literal> output_term{mkLiteral(qcir_var_conversion_map.at(qcir_output_term_var), qcir_output_polarity)};
     pcnf.addConstraint(output_clause, ConstraintType::clauses);
     pcnf.addConstraint(output_term, ConstraintType::terms);
 }
