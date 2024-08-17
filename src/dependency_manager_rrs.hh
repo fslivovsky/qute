@@ -16,7 +16,6 @@ using std::string;
 namespace Qute {
 
 class QCDCL_solver;
-enum ConstraintType;
 
 class DependencyManagerRRS: public DependencyManagerWatched {
 
