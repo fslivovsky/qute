@@ -10,6 +10,7 @@ namespace Qute {
 
 const char QTYPE_FORALL = 'a';
 const char QTYPE_EXISTS = 'e';
+const char QTYPE_FREE = 'f';
 const char QTYPE_UNDEF = 0;
 
 const string QDIMACS_QTYPE_FORALL = "a";
@@ -19,7 +20,7 @@ const string QDIMACS_QTYPE_EXISTS = "e";
 #define QCIR_QTYPE_COUNT 3
 
 const string QCIR_QTYPE[QCIR_QTYPE_COUNT] = {"exists", "forall", "free"};
-const char QCIR_QTYPE_MAP[QCIR_QTYPE_COUNT] = {QTYPE_EXISTS, QTYPE_FORALL, QTYPE_EXISTS};
+const char QCIR_QTYPE_MAP[QCIR_QTYPE_COUNT] = {QTYPE_EXISTS, QTYPE_FORALL, QTYPE_FREE};
 
 #define QCIR_GATE_COUNT 4
 
@@ -215,8 +216,10 @@ void Parser::readQCIR(istream& ifs) {
                   qcir_output_polarity = false;
                   name = name.substr(1);
                 }
-                qcir_output_clause_var = name + ".e";
-                qcir_output_term_var = name + ".a";
+                //qcir_output_clause_var = name + ".e";
+                //qcir_output_term_var = name + ".a";
+                qcir_output_clause_var = name;
+                qcir_output_term_var = name;
             } else {
                 unknown_identifier_error(identifier);
             }
@@ -253,22 +256,25 @@ void Parser::readQCIR(istream& ifs) {
     if (qcir_output_clause_var == "") {
         output_gate_missing_error();
     }
-    vector<Literal> output_clause{mkLiteral(qcir_var_conversion_map.at(qcir_output_clause_var), qcir_output_polarity)};
-    vector<Literal> output_term{mkLiteral(qcir_var_conversion_map.at(qcir_output_term_var), qcir_output_polarity)};
+    vector<Literal> output_clause{mkLiteral(qcir_cls_var_conversion_map.at(qcir_output_clause_var), qcir_output_polarity)};
+    vector<Literal> output_term{mkLiteral(qcir_trm_var_conversion_map.at(qcir_output_term_var), qcir_output_polarity)};
     pcnf.addConstraint(output_clause, ConstraintType::clauses);
     pcnf.addConstraint(output_term, ConstraintType::terms);
 }
 
 void Parser::addQCIRGate(string gate_name, uint32_t gate_type, vector<string>& inputs) {
-    string existential_var_name = gate_name + ".e";
-    string universal_var_name = gate_name + ".a";
+    //string existential_var_name = gate_name + ".e";
+    //string universal_var_name = gate_name + ".a";
+    // experimental: the same original name for both the existential and universal gate variable
+    string existential_var_name = gate_name;
+    string universal_var_name = gate_name;
     // Detect duplicate gate definitions
     if (qcir_var_conversion_map.find(gate_name) != qcir_var_conversion_map.end()) {
         duplicate_qcir_gate_error(gate_name);
     }
-    if (qcir_var_conversion_map.find(existential_var_name) != qcir_var_conversion_map.end()) {
+    /*if (qcir_var_conversion_map.find(existential_var_name) != qcir_var_conversion_map.end()) {
         duplicate_qcir_gate_error(gate_name);
-    }
+    }*/
     vector<int32_t> clause_inputs, term_inputs;
     clause_inputs.reserve(inputs.size());
     term_inputs.reserve(inputs.size());
@@ -287,15 +293,26 @@ void Parser::addQCIRGate(string gate_name, uint32_t gate_type, vector<string>& i
         if (clause_key == "") {
             num_empty_inputs++;
         }
-        if (qcir_var_conversion_map.find(clause_key) == qcir_var_conversion_map.end()) {
-            clause_key += ".e";
-            term_key += ".a";
+        int32_t cls_input_literal_id = 0;
+        int32_t trm_input_literal_id = 0;
+
+        if (qcir_var_conversion_map.find(clause_key) != qcir_var_conversion_map.end()) {
+          cls_input_literal_id = neg_multiplier * qcir_var_conversion_map[clause_key];
+          trm_input_literal_id = cls_input_literal_id;
+        } else {
+          if (qcir_cls_var_conversion_map.find(clause_key) != qcir_cls_var_conversion_map.end()) {
+              cls_input_literal_id = neg_multiplier * qcir_cls_var_conversion_map.at(clause_key);
+          }
+          if (qcir_trm_var_conversion_map.find(clause_key) != qcir_trm_var_conversion_map.end()) {
+              trm_input_literal_id = neg_multiplier * qcir_trm_var_conversion_map.at(clause_key);
+          }
         }
-        try {
-            clause_inputs.push_back(neg_multiplier * qcir_var_conversion_map.at(clause_key));
-            term_inputs.push_back(neg_multiplier * qcir_var_conversion_map.at(term_key));
-        } catch (std::out_of_range&) {
-            undeclared_gate_input_literal_error(input);
+
+        if (cls_input_literal_id != 0 && trm_input_literal_id != 0) {
+          clause_inputs.push_back(cls_input_literal_id);
+          term_inputs.push_back(trm_input_literal_id);
+        } else {
+          undeclared_gate_input_literal_error(input);
         }
     }
     pushQCIRVar(existential_var_name, QTYPE_EXISTS, true);
@@ -428,10 +445,26 @@ void Parser::addQCIRGate(string gate_name, uint32_t gate_type, vector<string>& i
 }
 
 void Parser::pushQCIRVar(const string& var_name, char qtype, bool auxiliary) {
-    assert(qcir_var_conversion_map.find(var_name) == qcir_var_conversion_map.end());
-    nr_vars++;
-    qcir_var_conversion_map.insert({var_name, nr_vars});
-    pcnf.addVariable(var_name, qtype, auxiliary);
+    /* if the variable is not auxiliary, push it to the shared map,
+     * otherwise push it to the map based on qtype */
+    if (!auxiliary) {
+      assert(qcir_var_conversion_map.find(var_name) == qcir_var_conversion_map.end());
+      nr_vars++;
+      qcir_var_conversion_map.insert({var_name, nr_vars});
+      pcnf.addVariable(var_name, qtype, auxiliary);
+    } else {
+      if (qtype == QTYPE_FORALL) {
+        assert(qcir_trm_var_conversion_map.find(var_name) == qcir_trm_var_conversion_map.end());
+        nr_vars++;
+        qcir_trm_var_conversion_map.insert({var_name, nr_vars});
+        pcnf.addVariable(var_name, qtype, auxiliary);
+      } else {
+        assert(qcir_cls_var_conversion_map.find(var_name) == qcir_cls_var_conversion_map.end());
+        nr_vars++;
+        qcir_cls_var_conversion_map.insert({var_name, nr_vars});
+        pcnf.addVariable(var_name, qtype, auxiliary);
+      }
+    }
 }
 
 char * Parser::uintToCharArray(uint32_t x) {

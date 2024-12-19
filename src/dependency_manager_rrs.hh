@@ -3,11 +3,9 @@
 
 #include "dependency_manager_watched.hh"
 #include <vector>
-#include <queue>
 #include <unordered_set>
 #include <string>
 #include <algorithm>
-#include <iostream>
 
 using std::vector;
 using std::unordered_set;

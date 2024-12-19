@@ -25,6 +25,8 @@ class Parser {
     PCNFContainer& pcnf;
     bool use_model_generation;
     std::map<std::string, int32_t> qcir_var_conversion_map;
+    std::map<std::string, int32_t> qcir_cls_var_conversion_map;
+    std::map<std::string, int32_t> qcir_trm_var_conversion_map;
     int32_t nr_vars;
     uint32_t current_line = 0;
 

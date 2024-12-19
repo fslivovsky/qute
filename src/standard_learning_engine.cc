@@ -1,4 +1,3 @@
-#include "logging.hh"
 #include "standard_learning_engine.hh"
 #include "constraint_DB.hh"
 #include "variable_data.hh"
@@ -16,7 +15,7 @@ StandardLearningEngine::StandardLearningEngine(QCDCL_solver& solver, string rrs_
  * we might also learn a "pseudo-unit" constraint: one whose "primary sub-constraint" (think existential sub-clause)
  * is unit propositionally, but which is unconstrained on secondaries (other than not being disabled)
  */
-bool StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, vector<Literal>& literal_vector, uint32_t& decision_level_backtrack_before, Literal& unit_literal, bool& constraint_learned, vector<Literal>& conflict_side_literals, vector<uint32_t>& premises) {
+bool StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, vector<Literal>& literal_vector, uint32_t& decision_level_backtrack_before, Literal& unit_literal, bool& constraint_learned, vector<Literal>& conflict_side_literals, vector<uint32_t>& premises, bool& result_is_tainted) {
   Constraint& constraint = solver.constraint_database->getConstraint(conflict_constraint_reference, constraint_type);
   if (solver.options.trace) {
     premises.push_back(constraint.id());
@@ -24,6 +23,9 @@ bool StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference,
   if (constraint.learnt) {
     solver.constraint_database->updateLBD(constraint);
     solver.constraint_database->bumpConstraintActivity(constraint, constraint_type);
+  }
+  if (constraint.isTainted()) {
+    result_is_tainted = true;
   }
   Literal rightmost_primary = Literal_Undef;
   vector<bool> characteristic_function = constraintToCf(constraint, constraint_type, rightmost_primary);
@@ -94,6 +96,9 @@ bool StandardLearningEngine::analyzeConflict(CRef conflict_constraint_reference,
     // Update "characteristic_function" to represent to resolvent (reduced). Also update "primary_literal_decision_level_counts".
     //LOG(trace) << "Resolving: " << cfToString(characteristic_function, rightmost_primary) << " and " << solver.variable_data_store->constraintToString(reason) << " on " << (sign(primary_assigned_last) ? "" : "-") << var(primary_assigned_last) << std::endl;
     resolveAndReduce(characteristic_function, reason, constraint_type, primary_assigned_last, rightmost_primary, primary_literal_decision_level_counts, literal_vector);
+    if (reason.isTainted()) {
+      result_is_tainted = true;
+    }
     assert(getPrimaryLiteralDecisionLevelCounts(characteristic_function, rightmost_primary, constraint_type) == primary_literal_decision_level_counts);
     conflict_side_literals.push_back(primary_assigned_last);
     if (!literal_vector.empty()) {

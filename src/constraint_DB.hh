@@ -21,7 +21,7 @@ class ConstraintDB {
 
 public:
   ConstraintDB(QCDCL_solver& solver, bool print_trace, double constraint_activity_decay, uint32_t max_learnt_clauses, uint32_t max_learnt_terms, uint32_t learnt_clauses_increment, uint32_t learnt_terms_increment, double clause_removal_ratio, double term_removal_ratio, bool use_activity_threshold, double constraint_increment, uint32_t LBD_threshold);
-  CRef addConstraint(vector<Literal>& literals, ConstraintType constraint_type, bool learnt);
+  CRef addConstraint(vector<Literal>& literals, ConstraintType constraint_type, bool learnt, bool tainted);
   Constraint& getConstraint(CRef constraint_reference, ConstraintType constraint_type);
   vector<CRef>::const_iterator constraintReferencesBegin(ConstraintType constraint_type, bool learnt);
   vector<CRef>::const_iterator constraintReferencesEnd(ConstraintType constraint_type, bool learnt);
@@ -33,6 +33,9 @@ public:
   virtual void notifyRestart();
   void updateLBD(Constraint& constraint);
   void relocate(CRef& constraint_reference, ConstraintType constraint_type);
+  void cleanTaintedConstraints(ConstraintType constraint_type, const vector<Literal>& antidote);
+  void taintLastConstraint(ConstraintType constraint_type) { if (!input_constraint_references[constraint_type].empty()) getConstraint(input_constraint_references[constraint_type].back(), constraint_type).taint(); };
+
   
 protected:
   void decayConstraintActivity(ConstraintType constraint_type);

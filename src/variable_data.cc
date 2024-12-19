@@ -6,7 +6,30 @@ namespace Qute {
 
 VariableDataStore::VariableDataStore(QCDCL_solver& solver): solver(solver), last_variable(0), last_universal(0) {}
 
+Variable extract_integer_name(std::string name) {
+  Variable result = 0;
+  if (name[0] == '0')
+    return 0;
+  for (char c : name) {
+    if ('0' <= c && c <= '9') {
+      result *= 10;
+      result += c - '0';
+    } else {
+      return 0;
+    }
+  }
+  return result;
+}
+
 void VariableDataStore::addVariable(string original_name, bool type) {
+  if (original_name == "") {
+    original_name = std::to_string(next_orig_id++);
+  } else {
+    Variable name_id = extract_integer_name(original_name);
+    if (name_id >= next_orig_id) {
+      next_orig_id = name_id + 1;
+    }
+  }
   variable_name.push_back(original_name);
   variable_data.emplace_back();
   assignment_data.emplace_back(type);

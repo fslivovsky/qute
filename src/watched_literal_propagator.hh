@@ -2,8 +2,6 @@
 #define watched_literal_propagator_hh
 
 #include <vector>
-#include <algorithm>
-#include <unordered_set>
 #include "propagator.hh"
 #include "solver_types.hh"
 #include "constraint.hh"

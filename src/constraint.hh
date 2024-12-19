@@ -21,20 +21,33 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #ifndef constraint_hh
 #define constraint_hh
 
-#include <vector>
 #include <iostream>
 
 #include "alloc.hh"
 #include "solver_types.hh"
 
+
 using std::ostream;
 
 namespace Qute {
 
+inline std::ostream& operator<< (std::ostream& o, Literal lit) {
+    return o << (sign(lit) ? " " : " -") << var(lit);
+};
+
+inline std::ostream& operator<< (std::ostream& o, const std::vector<Literal>& lits) {
+  for (Literal lit : lits) {
+    o << lit;
+  }
+  o << std::endl;
+  return o;
+}
+
 // Constraint class (clauses & terms).
 struct Constraint
 {
-  unsigned constraint_size: 29;
+  unsigned constraint_size: 28;
+  unsigned tainted: 1; // when using the dual CNF-DNF encoding, tells whether the output term has been used to derive this
   unsigned marked: 1;
   unsigned learnt: 1;
   unsigned is_reloced: 1;
@@ -45,8 +58,8 @@ struct Constraint
   Literal& operator [] (int i) { return data[i].lit; }
   Literal operator [] (int i) const { return data[i].lit; }
 
-  Literal* begin() { return &data[0].lit; }
-  Literal* end() { return &data[constraint_size].lit; }
+  const Literal* begin() const { return &data[0].lit; }
+  const Literal* end() const { return &data[constraint_size].lit; }
 
   Literal  last() { return data[constraint_size-1].lit; }
 
@@ -56,6 +69,9 @@ struct Constraint
   bool         isMarked    ()      const   { return marked; }
   void         mark        ()              { marked = 1; }
   void         unmark      ()              { marked = 0; }
+  bool         isTainted   ()      const   { return tainted; }
+  void         taint       ()              { tainted = 1; }
+  void         unTaint     ()              { tainted = 0; }
   bool         reloced     ()      const   { return is_reloced; }
   CRef         relocation  ()      const   { return data[0].rel; }
   void         relocate    (CRef cr)        { is_reloced = true; data[0].rel = cr; }
@@ -64,7 +80,7 @@ struct Constraint
   uint32_t&    id          ()              { return data[constraint_size + 2 * learnt].id; }
   unsigned     size        ()              { return constraint_size; }
 
-  Constraint(const Constraint& other, bool has_id): constraint_size(other.constraint_size), marked(false), learnt(other.learnt), is_reloced(false) {
+  Constraint(const Constraint& other, bool has_id): constraint_size(other.constraint_size), tainted(other.tainted), marked(false), learnt(other.learnt), is_reloced(false) {
     for (uint32_t i = 0; i < other.constraint_size; i++) {
       data[i].lit = other[i];
     }
@@ -77,7 +93,7 @@ struct Constraint
     }
   }
 
-  Constraint(const vector<Literal>& literals, bool learnt=false): constraint_size(literals.size()), marked(false), learnt(learnt), is_reloced(false) {
+  Constraint(const vector<Literal>& literals, bool learnt=false, bool tainted=false): constraint_size(literals.size()), tainted(tainted), marked(false), learnt(learnt), is_reloced(false) {
     for (uint32_t i = 0; i < literals.size(); i++) {
       data[i].lit = literals[i];
     }

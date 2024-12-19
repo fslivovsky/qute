@@ -22,8 +22,9 @@ public:
   virtual bool analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, 
                                vector<Literal>& literal_vector, uint32_t& decision_level_backtrack_before, 
                                Literal& unit_literal, bool& constraint_learned, vector<Literal>& conflict_side_literals,
-                               vector<uint32_t>& premises);
+                               vector<uint32_t>& premises, bool& result_is_tainted);
   string reducedLast();
+  bool reducedLast(Variable v);
 
 protected:
   vector<bool> constraintToCf(Constraint& constraint, ConstraintType constraint_type, Literal& rightmost_primary);
@@ -68,6 +69,10 @@ inline vector<Literal> cfToVector(vector<bool>& characteristic_function, Literal
     }
   }
   return result;
+}
+
+inline bool StandardLearningEngine::reducedLast(Variable v) {
+  return reduced_last[v];
 }
 
 }

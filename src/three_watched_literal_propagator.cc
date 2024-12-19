@@ -144,7 +144,7 @@ CRef ThreeWatchedLiteralPropagator::propagate(ConstraintType& constraint_type) {
   /* Every variable is assigned but no conflict/solution is detected.
      Use the model generation rule to obtain an initial term. */
     vector<Literal> initial_term = solver.model_generator->generateModel();
-    CRef initial_term_reference = solver.constraint_database->addConstraint(initial_term, ConstraintType::terms, true);
+    CRef initial_term_reference = solver.constraint_database->addConstraint(initial_term, ConstraintType::terms, true, false);
     auto& term = solver.constraint_database->getConstraint(initial_term_reference, ConstraintType::terms);
     term.mark(); // Immediately mark for removal upon constraint cleaning.
     if (solver.options.trace) {

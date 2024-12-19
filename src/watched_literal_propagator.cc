@@ -61,7 +61,7 @@ CRef WatchedLiteralPropagator::propagate(ConstraintType& constraint_type) {
         bool watcher_changed = false;
         if (!disablesConstraint(blocker, _constraint_type)) {
           Constraint& constraint = solver.constraint_database->getConstraint(constraint_reference, _constraint_type);
-          if (constraintIsWatchedByLiteral(constraint, watcher)) { // if we want to allow for removal, add "&& !constraint.isMarked()"
+          if (constraintIsWatchedByLiteral(constraint, watcher) && !constraint.isMarked()) { // if we want to allow for removal, add "&& !constraint.isMarked()"
             if (!updateWatchedLiterals(constraint, constraint_reference, _constraint_type, watcher_changed)) {
               // Constraint is empty: clean up, return constraint_reference.
               for (; i != record_vector.end(); i++, j++) {
@@ -88,7 +88,7 @@ CRef WatchedLiteralPropagator::propagate(ConstraintType& constraint_type) {
   /* Every variable is assigned but no conflict/solution is detected.
      Use the model generation rule to obtain an initial term. */
     vector<Literal> initial_term = solver.model_generator->generateModel();
-    CRef initial_term_reference = solver.constraint_database->addConstraint(initial_term, ConstraintType::terms, true);
+    CRef initial_term_reference = solver.constraint_database->addConstraint(initial_term, ConstraintType::terms, true, false);
     auto& term = solver.constraint_database->getConstraint(initial_term_reference, ConstraintType::terms);
     term.mark(); // Immediately mark for removal upon constraint cleaning.
     if (solver.options.trace) {
@@ -149,6 +149,11 @@ void WatchedLiteralPropagator::relocConstraintReferences(ConstraintType constrai
 
 bool WatchedLiteralPropagator::propagateUnwatched(CRef constraint_reference, ConstraintType constraint_type, bool& watchers_found) {
   Constraint& constraint = solver.constraint_database->getConstraint(constraint_reference, constraint_type);
+  if (constraint.isMarked()) {
+    // lazy constraint deletion: a marked constrained should be skipped, but for the sake of efficiency is not deleted immediately
+    watchers_found = true; // make the callee think watchers were found and delete this constraint from the unwatched list
+    return true;
+  }
   if ((constraint.size() == 0 || solver.variable_data_store->varType(var(constraint[0])) != constraint_type) && !isDisabled(constraint, constraint_type)) {
     //LOG(trace) << (constraint_type ? "Term " : "Clause ") << "empty: " << solver.variable_data_store->constraintToString(constraint) << std::endl;
     assert(solver.debug_helper->isEmpty(constraint, constraint_type));

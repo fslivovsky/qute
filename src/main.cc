@@ -1,9 +1,7 @@
 #include <limits>
-#include <functional>
 #include <csignal>
 #include <iostream>
 #include <string>
-#include <ctime>
 
 #include "main.hh"
 #include "logging.hh"
@@ -28,13 +26,15 @@
 #include "variable_data.hh"
 #include "three_watched_literal_propagator.hh"
 #include "watched_literal_propagator.hh"
+#ifdef USE_SMS
+#include "sms_propagator.hh"
+#endif
 
 using namespace Qute;
 using namespace std::placeholders;
 using std::cerr;
 using std::cout;
 using std::ifstream;
-using std::to_string;
 using std::string;
 
 static unique_ptr<QCDCL_solver> solver;
@@ -111,6 +111,11 @@ Outer-Inner Restart Options:
   --inner-restart-distance <int>        initial number of conflicts until inner restart [default: 100]
   --outer-restart-distance <int>        initial number of conflicts until outer restart [default: 100]
   --restart-multiplier <double>         restart limit multiplier [default: 1.1]
+
+SMS Options:
+  --sms-vertices <int>                  search for graphs with this many vertices [default: 2]
+  --sms-cutoff <int>                    cutoff limit for SMS's minimality check [default: 0]
+  -E --enumerate                        enumerate all solutions to the outermost block
 
 )";
 
@@ -191,6 +196,8 @@ int main(int argc, const char** argv)
   argument_constraints.push_back(make_unique<IfThenConstraint>("--dependency-learning", "off", "--decision-heuristic", "VMTF",
     "decision heuristic must be VMTF if dependency learning is deactivated"));
 
+  // TODO validate SMS args
+
   for (auto& constraint_ptr: argument_constraints) {
     if (!constraint_ptr->check(args)) {
       std::cout << constraint_ptr->message() << "\n\n";
@@ -201,6 +208,20 @@ int main(int argc, const char** argv)
 
   // END Command Line Parameter Validation
   solver = make_unique<QCDCL_solver>(std::stod(args["--time-limit"].asString()));
+
+  solver->enumerate = args["--enumerate"].asBool();
+
+#ifdef USE_SMS
+  // initialize an external propagator if desired
+  unique_ptr<ExternalPropagator> ext_prop;
+  // load SMS options into the solver instance
+  int vertices = args["--sms-vertices"].asLong();
+  int cutoff = args["--sms-cutoff"].asLong();
+  if (vertices > 2) {
+    ext_prop = make_unique<SMSPropagator>(solver.get(), vertices, cutoff);
+  }
+  solver->ext_prop = ext_prop.get();
+#endif
 
   solver->options.trace = args["--trace"].asBool();
   unique_ptr<Tracer> tracer;
@@ -243,7 +264,7 @@ if (args["--dependency-learning"].asString() == "off") {
 } else if (args["--decision-heuristic"].asString() == "VMTF") {
   decision_heuristic = make_unique<DecisionHeuristicVMTFdeplearn>(*solver, args["--no-phase-saving"].asBool());
 } else if (args["--decision-heuristic"].asString() == "VSIDS") {
-  bool tiebreak_scores;
+  bool tiebreak_scores = false;
   bool use_secondary_occurrences = false;
   bool prefer_fewer_occurrences = false;
   if (args["--tiebreak"].asString() == "arbitrary") {
@@ -398,7 +419,7 @@ if (args["--dependency-learning"].asString() == "off") {
 
   if (args["--partial-certificate"].asBool() && ((result == l_True && !solver->variable_data_store->varType(1)) ||
                                                  (result == l_False && solver->variable_data_store->varType(1)))) {
-    cout << learning_engine.reducedLast() << "\n";
+    cout << "v " << learning_engine.reducedLast() << "\n";
   }
 
   return (result == l_True ? 10 : result == l_False ? 20 : 0);

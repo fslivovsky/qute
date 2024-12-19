@@ -30,19 +30,19 @@ template <class LiteralContainer> inline void SimpleTracer::printConstraint(Lite
   *out << "0 ";
 }
 
-inline void SimpleTracer::printPremises(vector<uint32_t>& premise_ids) {
+inline void SimpleTracer::printPremises(const vector<uint32_t>& premise_ids) {
   for (auto& id: premise_ids) {
     *out << id << " ";
   }
 }
 
-void SimpleTracer::traceConstraint(vector<Literal>& literals, ConstraintType constraint_type, vector<uint32_t>& premise_ids) {
+void SimpleTracer::traceConstraint(vector<Literal>& literals, ConstraintType constraint_type, const vector<uint32_t>& premise_ids) {
   printConstraint(literals, constraint_type);
   printPremises(premise_ids);
   *out << "0\n";
 }
 
-void SimpleTracer::traceConstraint(Constraint& c, ConstraintType constraint_type, vector<uint32_t>& premise_ids) {
+void SimpleTracer::traceConstraint(Constraint& c, ConstraintType constraint_type, const vector<uint32_t>& premise_ids) {
   printConstraint(c, constraint_type);
   c.id() = running_constraint_id;
   printPremises(premise_ids);
@@ -56,7 +56,8 @@ void SimpleTracer::traceConstraint(Constraint& c, ConstraintType constraint_type
 }
 
 void SimpleTracer::printPrefix() {
-  for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
+  //for (Variable v = 1; v <= solver.variable_data_store->lastVariable(); v++) {
+  for (Variable v : solver.variable_data_store->ordinary) {
     bool v_type = solver.variable_data_store->varType(v);
     if (v == 1 || v_type != solver.variable_data_store->varType(v-1)) {
       *out << (v_type ? "a": "e") << " ";

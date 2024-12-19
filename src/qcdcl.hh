@@ -2,6 +2,7 @@
 #define qcdcl_hh
 
 #include "pcnf_container.hh"
+#include "constraint.hh"
 #include <vector>
 #include <iostream>
 #include <iomanip>
@@ -20,6 +21,7 @@ class ConstraintDB;
 class DebugHelper;
 class ModelGenerator;
 class RestartScheduler;
+class ExternalPropagator;
 
 class QCDCL_solver: public PCNFContainer {
 
@@ -28,16 +30,24 @@ public:
   virtual ~QCDCL_solver();
   // Methods required by PCNFContainer.
   virtual void addVariable(string original_name, char variable_type, bool auxiliary);
-  virtual void addConstraint(std::vector<Literal>& literals, ConstraintType constraint_type);
+  virtual CRef addConstraint(std::vector<Literal>& literals, ConstraintType constraint_type);
   virtual void addDependency(Variable of, Variable on);
   virtual void notifyMaxVarDeclaration(Variable max_var);
   virtual void notifyNumClausesDeclaration(uint32_t num_clauses);
+
+  void addConstraintDuringSearch(std::vector<Literal>& literals, ConstraintType constraint_type, int id);
+  Literal getUnitLiteralAfterBacktrack(std::vector<Literal>& clause);
 
   lbool solve();
   void interrupt();
   bool enqueue(Literal l, CRef reason);
   void printStatistics();
   void machineReadableSummary();
+  vector<Literal> blockingConstraint();
+
+  std::string externalize (const Constraint &lits) const;
+  std::string externalize (const vector<Literal> &lits) const;
+  std::string externalize (Literal lit) const;
 
   // Subsystems.
   VariableDataStore* variable_data_store;
@@ -50,6 +60,9 @@ public:
   StandardLearningEngine* learning_engine;
   DebugHelper* debug_helper;
   Tracer* tracer;
+
+  // External Propagator (for SMS and others)
+  ExternalPropagator* ext_prop = NULL;
 
   struct SolverStats
   {
@@ -82,6 +95,7 @@ public:
   clock_t t_birth;
   clock_t t_solve_begin;
   clock_t t_solve_end;
+  bool enumerate;
   lbool result;
   string filename;
   static const string string_result[3];
@@ -128,6 +142,9 @@ inline void QCDCL_solver::printStatistics() {
   }
   cout << "Number of initial terms generated: " << solver_statistics.initial_terms_generated << std::endl;
   cout << "Average initial term size: " << solver_statistics.average_initial_term_size << std::endl;
+
+  double total_time = (double)(clock() - t_birth) / CLOCKS_PER_SEC;
+  cout << "Total time (seconds): " << total_time << std::endl;
 }
 
 inline void QCDCL_solver::machineReadableSummary() {

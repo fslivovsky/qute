@@ -71,9 +71,21 @@ protected:
   QCDCL_solver& solver;
   Variable last_variable;
   Variable last_universal;
+  Variable next_orig_id; // next available original-name-id for a fresh variable (external name)
   vector<Variable> vars_of_type_until[2] = {{0},{0}};
   vector<Variable> decisions;
 
+public:
+  vector<Variable> to_enumerate; // enumerate winning moves to this set of variables (should be a subset of the first block)
+  vector<Variable> auxiliary; // need to know which variables are auxiliary in QCIR, for renaming
+  vector<Variable> ordinary;
+  inline void rename_auxiliary_variables() {
+    for (Variable v : auxiliary) {
+      if (varType(v)) { // universal
+        variable_name[v - 1] = std::to_string(next_orig_id++);
+      }
+    }
+  };
 };
 
 // Implementation of inline methods.
