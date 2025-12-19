@@ -289,7 +289,9 @@ lbool QCDCL_solver::solve() {
             }
             ++num_solutions;
             if (!options.trace) {
-              cout << "sol " << num_solutions << std::endl;
+              if (enumerate) {
+                cout << "sol " << num_solutions << std::endl;
+              }
               cout << "v " << learning_engine->reducedLast() << std::endl;
             }
             if (enumerate) {
