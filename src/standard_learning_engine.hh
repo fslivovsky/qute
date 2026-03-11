@@ -18,7 +18,7 @@ class QCDCL_solver;
 class StandardLearningEngine: public LearningEngine {
 
 public:
-  StandardLearningEngine(QCDCL_solver& solver, string rrs_mode);
+  StandardLearningEngine(QCDCL_solver& solver, bool use_depscheme_for_clauses, bool use_depscheme_for_terms);
   virtual bool analyzeConflict(CRef conflict_constraint_reference, ConstraintType constraint_type, 
                                vector<Literal>& literal_vector, uint32_t& decision_level_backtrack_before, 
                                Literal& unit_literal, bool& constraint_learned, vector<Literal>& conflict_side_literals,
@@ -43,7 +43,7 @@ protected:
   QCDCL_solver& solver;
   vector<bool> reduced_last;
   
-  bool use_rrs_for_qtype[2];
+  bool use_depscheme_for_qtype[2];
 };
 
 // Implementation of inline methods.

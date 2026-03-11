@@ -1,8 +1,8 @@
 #include "dependency_manager_watched.hh"
-#include "logging.hh"
 #include "qcdcl.hh"
 #include "variable_data.hh"
 #include "decision_heuristic.hh"
+#include "logging.hh"
 
 namespace Qute {
 

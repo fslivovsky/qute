@@ -23,7 +23,7 @@ friend class DecisionHeuristicSGDB;
 
 public:
   DependencyManagerRRS(QCDCL_solver& solver, string dependency_learning_strategy, string out_of_order_decisions);
-  virtual void reduceWithRRS(std::vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type);
+  virtual void reduceWithDepscheme(std::vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type);
   virtual void filterIndependentVariables(Variable unit_variable, vector<Literal>& literal_vector);
 
 protected:

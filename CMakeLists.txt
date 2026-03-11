@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.12)
 
 project(Qute)
 set(Tutorial_VERSION_MAJOR 1)
@@ -15,7 +15,7 @@ if (LOGGING STREQUAL off)
   add_definitions(-DNO_LOGGING)
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-function")
 if (CMAKE_BUILD_TYPE)
   message("Build type set to ${CMAKE_BUILD_TYPE}.")
 else()

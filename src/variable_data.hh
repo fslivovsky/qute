@@ -71,7 +71,7 @@ protected:
   QCDCL_solver& solver;
   Variable last_variable;
   Variable last_universal;
-  Variable next_orig_id; // next available original-name-id for a fresh variable (external name)
+  Variable next_orig_id = 1; // next available original-name-id for a fresh variable (external name)
   vector<Variable> vars_of_type_until[2] = {{0},{0}};
   vector<Variable> decisions;
 

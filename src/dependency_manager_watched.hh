@@ -36,8 +36,8 @@ public:
   virtual bool dependsOn(Variable of, Variable on) const;
   virtual void learnDependencies(Variable unit_variable, vector<Literal>& literal_vector);
 
-  // these methods only do something in DependencyManagerRRS
-  virtual void reduceWithRRS(std::vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type) {};
+  // these methods only do something when a dependency scheme is turned on
+  virtual void reduceWithDepscheme(std::vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type) {};
   virtual void filterIndependentVariables(Variable unit_variable, vector<Literal>& literal_vector) {};
 
   // methods around out-of-order decisions
@@ -67,7 +67,7 @@ protected:
     unordered_set<Variable> dependent_on;
     vector<Variable> dependent_on_vector;
     vector<Variable> independent_of;
-    DependencyData(): watcher(0), independencies_known(false) {};
+    DependencyData(): watcher(0), watcher_index(0), independencies_known(false) {};
   };
 
   vector<DependencyData> variable_dependencies;

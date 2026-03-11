@@ -1,3 +1,4 @@
+#include "qcdcl.hh"
 #include "three_watched_literal_propagator.hh"
 #include "decision_heuristic.hh"
 #include "logging.hh"
@@ -7,7 +8,6 @@
 #include "constraint_DB.hh"
 #include "tracer.hh"
 #include "dependency_manager_watched.hh"
-#include "qcdcl.hh"
 
 namespace Qute {
 

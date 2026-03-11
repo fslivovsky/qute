@@ -22,7 +22,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #define solver_types_hh
 
 #include <vector>
-#include <functional>
 #include "alloc.hh"
 
 using std::vector;

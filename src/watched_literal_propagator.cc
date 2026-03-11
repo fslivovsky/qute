@@ -1,12 +1,11 @@
+#include "qcdcl.hh"
 #include "watched_literal_propagator.hh"
-#include "logging.hh"
 #include "debug_helper.hh"
 #include "variable_data.hh"
 #include "model_generator.hh"
 #include "constraint_DB.hh"
 #include "tracer.hh"
 #include "dependency_manager_watched.hh"
-#include "qcdcl.hh"
 
 namespace Qute {
 

@@ -5,7 +5,6 @@
 #include <docopt_util.h>
 #include <algorithm>
 #include <regex>
-#include <iostream>
 #include <map>
 #include <string>
 #include <vector>

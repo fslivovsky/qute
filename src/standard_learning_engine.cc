@@ -6,9 +6,9 @@
 
 namespace Qute {
 
-StandardLearningEngine::StandardLearningEngine(QCDCL_solver& solver, string rrs_mode): solver(solver) {
-  use_rrs_for_qtype[0] = (rrs_mode != "off");
-  use_rrs_for_qtype[1] = (rrs_mode == "both");
+StandardLearningEngine::StandardLearningEngine(QCDCL_solver& solver, bool use_depscheme_for_clauses, bool use_depscheme_for_terms): solver(solver) {
+  use_depscheme_for_qtype[0] = use_depscheme_for_clauses;
+  use_depscheme_for_qtype[1] = use_depscheme_for_terms;
 }
 
 /* with the possibility of out-of-order decisions, it is not guaranteed that we learn a unit constraint
@@ -209,7 +209,7 @@ void StandardLearningEngine::resolveAndReduce(vector<bool>& characteristic_funct
   }
   /* filter out provably independent clashing variables using the reflexive
    * resolution-path dependency scheme */
-  if (!literal_vector.empty() && use_rrs_for_qtype[solver.variable_data_store->varType(pivot_var)]) {
+  if (!literal_vector.empty() && use_depscheme_for_qtype[solver.variable_data_store->varType(pivot_var)]) {
 	  solver.dependency_manager->filterIndependentVariables(pivot_var, literal_vector);
   }
   if (literal_vector.empty()) {
@@ -238,7 +238,7 @@ void StandardLearningEngine::resolveAndReduce(vector<bool>& characteristic_funct
     }
 
     // additionally, apply Drrs reduction
-    solver.dependency_manager->reduceWithRRS(characteristic_function, rightmost_primary, constraint_type);
+    solver.dependency_manager->reduceWithDepscheme(characteristic_function, rightmost_primary, constraint_type);
   }
 }
 

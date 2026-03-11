@@ -1,3 +1,4 @@
+#include "external_propagator.hh"
 #include "constraint_DB.hh"
 #include "debug_helper.hh"
 #include "decision_heuristic.hh"
@@ -6,18 +7,144 @@
 #include "propagator.hh"
 #include "qcdcl.hh"
 #include "restart_scheduler.hh"
+#include "simple_tracer.hh"
 #include "standard_learning_engine.hh"
 #include "tracer.hh"
 #include "variable_data.hh"
 #include "watched_literal_propagator.hh"
 
-#include "external_propagator.hh"
-
 #include <algorithm>
 #include <iostream>
+#include <iomanip>
 #include <string>
 
 namespace Qute {
+
+void QCDCL_solver::machineReadableHeader() {
+	std::cout
+		<< "id"
+		<< "," << "filename"
+		<< "," << "univars"
+		<< "," << "exivars"
+		<< "," << "result"
+		<< "," << "solve_time"
+		<< "," << "total_time"
+		<< "," << "learned_clauses"
+		<< "," << "learned_tautological_clauses"
+		<< "," << "learned_asserting_clauses"
+		<< "," << "learned_terms"
+		<< "," << "learned_contradictory_terms"
+		<< "," << "learned_asserting terms"
+		<< "," << "fraction_decisions_assignments"
+		<< "," << "backtracks"
+		<< "," << "backtracks_deplearn"
+		<< "," << "depscheme_resolved_conflicts"
+		<< "," << "proven_independencies"
+		<< "," << "depscheme-reduced_literals"
+		<< "," << "time_computing_depscheme"
+		<< "," << "time_generalized_reduction"
+		<< "," << "fraction_independent_trivial_deps"
+		<< "," << "fraction_learned_trivial_deps"
+		<< "," << "initial_terms"
+		<< "," << "initial_terms_avg_size"
+		<< "," << "total_time"
+		<< std::endl;
+}
+
+void QCDCL_solver::machineReadableSummary() {
+
+  double solve_time = (double)(t_solve_end - t_solve_begin) / CLOCKS_PER_SEC;
+  double total_time = (double)(clock() - t_birth) / CLOCKS_PER_SEC;
+
+  /*double bps = solver_statistics.backtracks_total / solve_time;
+  double wps = solver_statistics.watched_list_accesses / solve_time;
+  double swe = solver_statistics.spurious_watch_events / (double)solver_statistics.watched_list_accesses * 100;*/
+  /*double ass_lrn_frac[2];
+  double ass_lrn_mod[2] = {static_cast<double>(result == l_False), static_cast<double>(result == l_True)}; // make the empty constraint count as asserting
+  for (ConstraintType ct : constraint_types) {
+    if (solver_statistics.learned_total[ct] > 0) {
+      ass_lrn_frac[ct] = (solver_statistics.learned_asserting[ct] + ass_lrn_mod[ct]) / solver_statistics.learned_total[ct];
+    } else {
+      ass_lrn_frac[ct] = -1;
+    }
+  }*/
+
+  double frac_dec_ass = 2;
+  if (solver_statistics.nr_assignments) {
+	  frac_dec_ass = double(solver_statistics.nr_decisions) / double(solver_statistics.nr_assignments);
+  }
+
+  double frac_lrn_trv = 2;
+  double frac_indep_trv = 2;
+  if (computeNrTrivial()) {
+	  frac_lrn_trv = double(solver_statistics.nr_dependencies) / double(computeNrTrivial());
+	  frac_indep_trv = double(solver_statistics.nr_independencies) / double(computeNrTrivial());
+  }
+
+  std::cout << "QUTE_ANS"
+    << "," << filename
+    << "," << variable_data_store->countVarsOfTypeUntil(true, variable_data_store->lastVariable())
+    << "," << variable_data_store->countVarsOfTypeUntil(false, variable_data_store->lastVariable())
+    << "," << string_result[result]
+           << std::setprecision(4)
+    << "," << solve_time
+    << "," << total_time
+	<< "," << solver_statistics.learned_total[false]
+	<< "," << solver_statistics.learned_tautological[false]
+	<< "," << solver_statistics.learned_asserting[false]
+	<< "," << solver_statistics.learned_total[true]
+	<< "," << solver_statistics.learned_tautological[true]
+	<< "," << solver_statistics.learned_asserting[true]
+	<< "," << frac_dec_ass
+	<< "," << solver_statistics.backtracks_total
+	<< "," << solver_statistics.backtracks_dep
+	<< "," << solver_statistics.dep_conflicts_resolved
+	<< "," << solver_statistics.nr_independencies
+	<< "," << solver_statistics.nr_depscheme_reduced_lits
+	<< "," << double(solver_statistics.time_spent_computing_depscheme) / CLOCKS_PER_SEC
+	<< "," << double(solver_statistics.time_spent_reducing_by_depscheme) / CLOCKS_PER_SEC
+	<< "," << frac_indep_trv
+	<< "," << frac_lrn_trv
+	<< "," << solver_statistics.initial_terms_generated
+	<< "," << solver_statistics.average_initial_term_size
+	<< std::endl;
+
+}
+
+void QCDCL_solver::printStatistics() {
+  std::cout << "Number of learned clauses: " << solver_statistics.learned_total[false] <<  "\n";
+  std::cout << "Number of learned tautological clauses: " << solver_statistics.learned_tautological[false] <<  "\n";
+  std::cout << "Number of learned    asserting clauses: " << solver_statistics.learned_asserting[false] <<  "\n";
+  std::cout << "Number of learned terms: " << solver_statistics.learned_total[true] << "\n";
+  std::cout << "Number of learned contradictory terms: " << solver_statistics.learned_tautological[true] << "\n";
+  std::cout << "Number of learned     asserting terms: " << solver_statistics.learned_asserting[true] <<  "\n";
+  if (solver_statistics.nr_assignments) {
+    std::cout << "Fraction of decisions among assignments: " << double(solver_statistics.nr_decisions) / double(solver_statistics.nr_assignments) << "\n";
+  }
+  std::cout << "Number of backtracks: " << solver_statistics.backtracks_total << "\n";
+  std::cout << "Number of backtracks caused by dependency learning: " << solver_statistics.backtracks_dep << "\n";
+  std::cout << "Number of dependency conflicts resolved by depscheme: " << solver_statistics.dep_conflicts_resolved << "\n";
+  std::cout << "Number of proven independencies: " << solver_statistics.nr_independencies << std::endl;
+  std::cout << "Number of depscheme-reduced literals: " << solver_statistics.nr_depscheme_reduced_lits << std::endl;
+  std::cout << "Amount of time spent computing depscheme (s): " << double(solver_statistics.time_spent_computing_depscheme) / CLOCKS_PER_SEC << std::endl;
+  std::cout << "Amount of time spent on generalized forall reduction (s): " << double(solver_statistics.time_spent_reducing_by_depscheme) / CLOCKS_PER_SEC << std::endl;
+  if (computeNrTrivial()) {
+    std::cout << "Learned dependencies as a fraction of trivial: " << double(solver_statistics.nr_dependencies) / double(computeNrTrivial()) << std::endl;
+  }
+  std::cout << "Number of initial terms generated: " << solver_statistics.initial_terms_generated << std::endl;
+  std::cout << "Average initial term size: " << solver_statistics.average_initial_term_size << std::endl;
+
+  double total_time = (double)(clock() - t_birth) / CLOCKS_PER_SEC;
+  std::cout << "Total time (seconds): " << total_time << std::endl;
+}
+
+void QCDCL_solver::interrupt() {
+  interrupt_flag = true;
+  if (options.print_stats) {
+    printStatistics();
+    options.print_stats = false;
+  }
+}
 
 const string QCDCL_solver::string_result[3] = {"UNSAT", "SAT", "UNDEF"};
 
@@ -213,7 +340,10 @@ lbool QCDCL_solver::solve() {
   dependency_manager->notifyStart();
   decision_heuristic->notifyStart();
   if (options.trace) {
-    tracer->notifyStart();
+    if (!tracer->notifyStart()) {
+		std::cerr << "could not initialize tracer: cannot access file " << ((SimpleTracer*)tracer)->filename  << " for writing " << std::endl;
+		return l_Undef;
+	}
   }
 
   size_t num_solutions = 0;
@@ -288,29 +418,30 @@ lbool QCDCL_solver::solve() {
               continue;
             }
             ++num_solutions;
-            if (!options.trace) {
-              if (enumerate) {
-                cout << "sol " << num_solutions << std::endl;
-              }
-              cout << "v " << learning_engine->reducedLast() << std::endl;
-            }
+            //if (!options.trace) {
+            //}
             if (enumerate) {
               // for solution enumeration, block the solution here
+              std::cout << "sol " << num_solutions << " ";
+			  std::cout << "v " << learning_engine->reducedLast() << std::endl;
               vector<Literal> blocking_constraint = blockingConstraint();
               addConstraintDuringSearch(blocking_constraint, (ConstraintType) (1-constraint_type), num_solutions);
               continue;
             }
           }
           t_solve_end = clock();
-          if (!options.trace) {
+          //if (!options.trace) {
             if (enumerate) {
               std::cout << "Found " << num_solutions << " solution" << (num_solutions == 1 ? "" : "s") << std::endl;
             }
             if (ext_prop) {
               ext_prop->printStats();
             }
-          }
+          //}
           result = lbool(constraint_type);
+		  if (options.trace) {
+			  tracer->notifyEnd();
+		  }
           return result;
         } else {
           CRef learned_constraint_reference = constraint_database->addConstraint(literal_vector, constraint_type, true, result_is_tainted);

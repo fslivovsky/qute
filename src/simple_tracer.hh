@@ -19,11 +19,14 @@ class QCDCL_solver;
 class SimpleTracer: public Tracer {
 
 public:
-  SimpleTracer(QCDCL_solver& solver);
-  virtual void notifyStart();
+  SimpleTracer(QCDCL_solver& solver, string filename);
+  virtual bool notifyStart();
+  virtual void notifyEnd();
   virtual void traceConstraint(vector<Literal>& literals, ConstraintType constraint_type, const vector<uint32_t>& premise_ids);
   virtual void traceConstraint(Constraint& constraint, ConstraintType constraint_type, const vector<uint32_t>& premise_ids);
   virtual void traceConstraint(Constraint& c, ConstraintType constraint_type);
+
+  string filename;
 
 protected:
   void printPrefix();
@@ -32,7 +35,6 @@ protected:
 
   QCDCL_solver& solver;
   ofstream file_stream;
-  unique_ptr<ostream> out;
   streambuf* buf;
 
   uint32_t running_constraint_id;

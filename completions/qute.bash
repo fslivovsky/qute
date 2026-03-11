@@ -45,6 +45,11 @@ _qute_complete()
 			COMPREPLY=( $(compgen -W "${OPTS_ALL[*]}" -- $cur) )
 			return 0
 			;;
+		"--depscheme")
+			OPTS_ALL="off rrs upure"
+			COMPREPLY=( $(compgen -W "${OPTS_ALL[*]}" -- $cur) )
+			return 0
+			;;
 	esac
 	case $cur in
 		-*)
@@ -64,13 +69,15 @@ _qute_complete()
 					--dependency-learning
 					--watched-literals
 					--out-of-order-decisions
-					--rrs
+					--depscheme
+					--depscheme-term-learning-unsafe
 					--no-phase-saving
 					--phase-heuristic
 					--partial-certificate
 					-v --verbose
 					--print-stats
 					--machine-readable
+					--machine-readable-header
 					--trace
 					-t --time-limit
 					--exponent
@@ -89,7 +96,10 @@ _qute_complete()
 					--threshold-factor
 					--inner-restart-distance
 					--outer-restart-distance
-					--restart-multiplier"
+					--restart-multiplier
+					--sms-vertices
+					--sms-cutoff
+					--E --enumerate"
 			COMPREPLY=( $(compgen -W "${OPTS_ALL[*]}" -- $cur) )
 			return 0
 			;;

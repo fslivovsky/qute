@@ -1,8 +1,8 @@
 #ifndef pcnf_container_hh
 #define pcnf_container_hh
 
-#include <vector>
 #include <string>
+#include <vector>
 #include "solver_types.hh"
 
 using std::string;

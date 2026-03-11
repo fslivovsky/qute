@@ -1,6 +1,5 @@
 #include "dependency_manager_rrs.hh"
 #include "qcdcl.hh"
-#include "logging.hh"
 #include "variable_data.hh"
 #include "constraint_DB.hh"
 #include <queue>
@@ -39,7 +38,7 @@ void DependencyManagerRRS::filterIndependentVariables(Variable unit_variable, ve
   literal_vector.resize(j);
 }
 
-void DependencyManagerRRS::reduceWithRRS(vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type) {
+void DependencyManagerRRS::reduceWithDepscheme(vector<bool>& characteristic_function, Literal& rightmost_primary, ConstraintType constraint_type) {
     clock_t t = clock();
     vector<Variable> blockers;
     int bound = Min_Literal_Int;
@@ -64,16 +63,16 @@ void DependencyManagerRRS::reduceWithRRS(vector<bool>& characteristic_function, 
             }
           }
           characteristic_function[i] = !can_be_reduced;
-          solver.solver_statistics.nr_RRS_reduced_lits += can_be_reduced;
+          solver.solver_statistics.nr_depscheme_reduced_lits += can_be_reduced;
           if (i % 2 == 1) {
             --i;
-            solver.solver_statistics.nr_RRS_reduced_lits += characteristic_function[i] && can_be_reduced;
+            solver.solver_statistics.nr_depscheme_reduced_lits += characteristic_function[i] && can_be_reduced;
             characteristic_function[i] = characteristic_function[i] && !can_be_reduced;
           }
         }
       }
     }
-    solver.solver_statistics.time_spent_reducing_by_RRS += clock()-t;
+    solver.solver_statistics.time_spent_reducing_by_depscheme += clock()-t;
 }
 
 void DependencyManagerRRS::getDepsRRS(Variable v) {
@@ -97,7 +96,7 @@ void DependencyManagerRRS::getDepsRRS(Variable v) {
     }
   }
   variable_dependencies[v - 1].independencies_known = true;
-  solver.solver_statistics.time_spent_computing_RRS += clock()-t;
+  solver.solver_statistics.time_spent_computing_depscheme += clock()-t;
 }
 
 vector<bool> DependencyManagerRRS::getReachable(Literal l) {
@@ -112,7 +111,7 @@ vector<bool> DependencyManagerRRS::getReachable(Literal l) {
    */
 
   uint32_t num_vars = solver.variable_data_store->lastVariable();
-  uint32_t num_lits = num_vars * 2;
+  uint32_t num_lits = num_vars * 2 + 2; // literals start at 2
 
   vector<bool> reachable(num_lits);
   reachable.assign(num_lits, false);

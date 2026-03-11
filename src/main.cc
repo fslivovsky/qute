@@ -2,8 +2,8 @@
 #include <csignal>
 #include <iostream>
 #include <string>
-
 #include "main.hh"
+#include "external_propagator.hh"
 #include "logging.hh"
 #include "simple_tracer.hh"
 #include "debug_helper.hh"
@@ -16,6 +16,7 @@
 #include "decision_heuristic_VSIDS_deplearn.hh"
 #include "decision_heuristic_SGDB.hh"
 #include "dependency_manager_rrs.hh"
+#include "dependency_manager_upure.hh"
 #include "model_generator_simple.hh"
 #include "model_generator_weighted.hh"
 #include "restart_scheduler_none.hh"
@@ -26,9 +27,6 @@
 #include "variable_data.hh"
 #include "three_watched_literal_propagator.hh"
 #include "watched_literal_propagator.hh"
-#ifdef USE_SMS
-#include "sms_propagator.hh"
-#endif
 
 using namespace Qute;
 using namespace std::placeholders;
@@ -39,7 +37,7 @@ using std::string;
 
 static unique_ptr<QCDCL_solver> solver;
 
-void signal_handler(int signal)
+void signal_handler(int)// signal)
 {
   solver->interrupt();
 }
@@ -68,18 +66,20 @@ General Options:
                                         (off | outermost | fewest | all) [default: all]
   --watched-literals <int>              watched-literals scheme (out-of-order decisions require 3)
                                         (2 | 3) [default: 2]
-  --out-of-order-decisions arg          lift the constraint that decisions should respect dependencies [default: off]
+  --out-of-order-decisions arg          decisions should not respect dependencies [default: off]
                                         (off, existential, universal, all)
-  --rrs arg                             toggle the use of the resolution-path dependency scheme
-                                        (off | clauses | both) [default: off]
+  --depscheme arg                       use a dependency scheme to resolve dependency conflicts
+                                        (off | rrs | upure) [default: off]
+  --depscheme-term-learning-unsafe      use the selected dependency scheme for term learning (soundness unknown) 
   --no-phase-saving                     deactivate phase saving
   --phase-heuristic arg                 phase selection heuristic [default: watcher]
                                         (invJW, qtype, watcher, random, false, true) 
   --partial-certificate                 output assignment to outermost block
   -v --verbose                          output information during solver run
   --print-stats                         print statistics on termination
-  --machine-readable                    print a machine-readable CSV line with comprehensive information instead of just the answer
-  --trace                               output solver trace for certificate generation
+  --machine-readable                    print a comma-separated CSV line with full stats instead of just answer
+  --machine-readable-header             print a header line for --machine-readable
+  --trace <string>                      output solver trace for certificate generation into this file
   -t --time-limit <double>              tell the solver to give up after this much time (in seconds) [default: 1e52]
 
 Weighted Model Generation Options:
@@ -123,6 +123,11 @@ int main(int argc, const char** argv)
 {
   std::map<std::string, docopt::value> args = docopt::docopt(USAGE, { argv + 1, argv + argc }, true, "Qute v.1.1");
 
+  if (args["--machine-readable-header"].asBool()) {
+	  QCDCL_solver::machineReadableHeader();
+	  return 0;
+  }
+
   /*for (auto arg: args) { // For debugging only.
     std::cout << arg.first << " " << arg.second << "\n";
   }*/
@@ -161,9 +166,6 @@ int main(int argc, const char** argv)
 
   vector<string> dependency_learning_strategies = {"off", "outermost", "fewest", "all"};
   argument_constraints.push_back(make_unique<ListConstraint>(dependency_learning_strategies, "--dependency-learning"));
-
-  vector<string> rrs_mode = {"off", "clauses", "both"};
-  argument_constraints.push_back(make_unique<ListConstraint>(rrs_mode, "--rrs"));
 
   vector<string> phase_heuristics = {"invJW", "qtype", "watcher", "random", "false", "true"};
   argument_constraints.push_back(make_unique<ListConstraint>(phase_heuristics, "--phase-heuristic"));
@@ -211,23 +213,24 @@ int main(int argc, const char** argv)
 
   solver->enumerate = args["--enumerate"].asBool();
 
-#ifdef USE_SMS
   // initialize an external propagator if desired
   unique_ptr<ExternalPropagator> ext_prop;
   // load SMS options into the solver instance
-  int vertices = args["--sms-vertices"].asLong();
+  /*int vertices = args["--sms-vertices"].asLong();
   int cutoff = args["--sms-cutoff"].asLong();
   if (vertices > 2) {
     ext_prop = make_unique<SMSPropagator>(solver.get(), vertices, cutoff);
-  }
+  }*/
   solver->ext_prop = ext_prop.get();
-#endif
 
-  solver->options.trace = args["--trace"].asBool();
   unique_ptr<Tracer> tracer;
-  if (solver->options.trace) {
-    tracer = make_unique<SimpleTracer>(*solver);
+  if (args["--trace"].isString()) {
+	string trace_file = args["--trace"].asString();
+	solver->options.trace = true;
+    tracer = make_unique<SimpleTracer>(*solver, trace_file);
     solver->tracer = tracer.get();
+  } else {
+	solver->options.trace = false;
   }
 
   ConstraintDB constraint_database(*solver,
@@ -249,8 +252,11 @@ int main(int argc, const char** argv)
   VariableDataStore variable_data_store(*solver);
   solver->variable_data_store = &variable_data_store;
 
+	string depscheme = args["--depscheme"].asString();
   unique_ptr<DependencyManagerWatched> dependency_manager;
-  if (args["--rrs"].asString() == "off") {
+  if (depscheme == "upure") {
+    dependency_manager = make_unique<DependencyManagerUPure>(*solver, args["--dependency-learning"].asString(), args["--out-of-order-decisions"].asString());
+	} else if (depscheme == "off") {
     dependency_manager = make_unique<DependencyManagerWatched>(*solver, args["--dependency-learning"].asString(), args["--out-of-order-decisions"].asString());
   } else {
     dependency_manager = make_unique<DependencyManagerRRS>(*solver, args["--dependency-learning"].asString(), args["--out-of-order-decisions"].asString());
@@ -349,7 +355,7 @@ if (args["--dependency-learning"].asString() == "off") {
 
   solver->restart_scheduler = restart_scheduler.get();
 
-  StandardLearningEngine learning_engine(*solver, args["--rrs"].asString());
+  StandardLearningEngine learning_engine(*solver, depscheme != "off", args["--depscheme-term-learning-unsafe"].asBool());
   solver->learning_engine = &learning_engine;
 
   unique_ptr<Propagator> propagator;
@@ -378,6 +384,8 @@ if (args["--dependency-learning"].asString() == "off") {
   else {
     parser.readAUTO();
   }
+
+  //solver->variable_data_store->rename_auxiliary_variables();
   
   unique_ptr<ModelGenerator> model_generator;
   if (args["--model-generation"].asString() == "weighted") {
@@ -409,13 +417,13 @@ if (args["--dependency-learning"].asString() == "off") {
     solver->printStatistics();
   }
 
-  if (!solver->options.trace) {
+  //if (!solver->options.trace) {
     if (args["--machine-readable"].asBool()) {
       solver->machineReadableSummary();
     } else {
       cout << solver->string_result[result] << std::endl;
     }
-  }
+  //}
 
   if (args["--partial-certificate"].asBool() && ((result == l_True && !solver->variable_data_store->varType(1)) ||
                                                  (result == l_False && solver->variable_data_store->varType(1)))) {

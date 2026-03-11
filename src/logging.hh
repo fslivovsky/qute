@@ -2,11 +2,12 @@
 #define logging_hh
 
 #include <iostream>
-#include <memory>
 
 #ifdef NO_LOGGING
+#undef LOG
 #define LOG(ARG) if (0) std::cerr
 #else
+#undef LOG
 #define LOG(ARG) Logger::get().setMessageLevel(Loglevel::ARG)
 #endif
 

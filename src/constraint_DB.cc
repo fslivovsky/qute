@@ -1,7 +1,7 @@
-#include "constraint_DB.hh"
 #include "variable_data.hh"
 #include "watched_literal_propagator.hh"
 #include "qcdcl.hh"
+#include "constraint_DB.hh"
 
 #include <algorithm>
 
