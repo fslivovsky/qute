@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <assert.h>
 #include <stdexcept>
+#include <unordered_set>
 
 //using namespace std;
 using std::istream;
@@ -276,6 +277,8 @@ void Parser::addQCIRGate(string gate_name, uint32_t gate_type, vector<string>& i
         duplicate_qcir_gate_error(gate_name);
     }*/
     vector<int32_t> clause_inputs, term_inputs;
+	std::unordered_set<int32_t> input_set;
+
     clause_inputs.reserve(inputs.size());
     term_inputs.reserve(inputs.size());
     uint32_t num_empty_inputs = 0;
@@ -311,6 +314,22 @@ void Parser::addQCIRGate(string gate_name, uint32_t gate_type, vector<string>& i
         if (cls_input_literal_id != 0 && trm_input_literal_id != 0) {
           clause_inputs.push_back(cls_input_literal_id);
           term_inputs.push_back(trm_input_literal_id);
+		  if (input_set.find(-cls_input_literal_id) != input_set.end()) {
+			  std::cout << "Warning input contains a tautological gate" << std::endl;
+			  // tautological set of inputs, if this is AND or OR gate, then
+			  // switch gate type and clear inputs, because
+			  // AND(x, -x) = FALSE = OR()
+			  // OR(x, -x) = TRUE = AND()
+			  // XOR and ITE gates are handled separately below
+			  if (0 <= gate_type && gate_type <= 2) {
+				  clause_inputs.clear();
+				  term_inputs.clear();
+				  gate_type = 1 - gate_type;
+				  break; // no need to parse any more inputs
+			  }
+		  } else {
+			  input_set.insert(cls_input_literal_id);
+		  }
         } else {
           undeclared_gate_input_literal_error(input);
         }
@@ -328,6 +347,8 @@ void Parser::addQCIRGate(string gate_name, uint32_t gate_type, vector<string>& i
     Literal g_c = mkLiteral(gate_clause_var, true);
     Literal g_t = mkLiteral(gate_term_var, true);
 
+	// TODO optimize and possibly propagate tautological/contradictory gates
+	// TODO fix tautological ITE gates
     switch (gate_type) {
         case 0: {
             // AND gate
@@ -386,32 +407,51 @@ void Parser::addQCIRGate(string gate_name, uint32_t gate_type, vector<string>& i
             if (clause_inputs.size() != 2) {
                 invalid_xor_gate_size_error();
             }
-            Literal x = mkLiteral(abs(clause_inputs[0]), clause_inputs[0] > 0);
-            Literal y = mkLiteral(abs(clause_inputs[1]), clause_inputs[1] > 0);
-            vector<vector<Literal>> clauses = {
-                {~g_c, ~x, ~y},
-                {~g_c,  x,  y},
-                { g_c, ~x,  y},
-                { g_c,  x, ~y}
-            };
-            for (vector<Literal>& c : clauses) {
-                pcnf.addConstraint(c, ConstraintType::clauses);
-            }
-            x = mkLiteral(abs(term_inputs[0]), term_inputs[0] > 0);
-            y = mkLiteral(abs(term_inputs[1]), term_inputs[1] > 0);
-            vector<vector<Literal>> terms = {
-                { g_t,  x,  y},
-                { g_t, ~x, ~y},
-                {~g_t,  x, ~y},
-                {~g_t, ~x,  y}
-            };
-            for (vector<Literal>& t : terms) {
-                pcnf.addConstraint(t, ConstraintType::terms);
-            }
-            break;
-        }
+            
+			if (abs(clause_inputs[0]) != abs(clause_inputs[1])) {
+				Literal x = mkLiteral(abs(clause_inputs[0]), clause_inputs[0] > 0);
+				Literal y = mkLiteral(abs(clause_inputs[1]), clause_inputs[1] > 0);
+				vector<vector<Literal>> clauses = {
+					{~g_c, ~x, ~y},
+					{~g_c,  x,  y},
+					{ g_c, ~x,  y},
+					{ g_c,  x, ~y}
+				};
+				for (vector<Literal>& c : clauses) {
+					pcnf.addConstraint(c, ConstraintType::clauses);
+				}
+				x = mkLiteral(abs(term_inputs[0]), term_inputs[0] > 0);
+				y = mkLiteral(abs(term_inputs[1]), term_inputs[1] > 0);
+				vector<vector<Literal>> terms = {
+					{ g_t,  x,  y},
+					{ g_t, ~x, ~y},
+					{~g_t,  x, ~y},
+					{~g_t, ~x,  y}
+				};
+				for (vector<Literal>& t : terms) {
+					pcnf.addConstraint(t, ConstraintType::terms);
+				}
+			} else {
+				// special case: XOR(x, x) or XOR(x, -x)
+				if (clause_inputs[0] == clause_inputs[1]) {
+					// XOR(x, x) == FALSE
+					vector<Literal> c = {~g_c};
+					pcnf.addConstraint(c, ConstraintType::clauses);
+					vector<Literal> t = {g_t};
+					pcnf.addConstraint(t, ConstraintType::terms);
+				} else {
+					// XOR(x, -x) == TRUE
+					vector<Literal> c = {g_c};
+					pcnf.addConstraint(c, ConstraintType::clauses);
+					vector<Literal> t = {~g_t};
+					pcnf.addConstraint(t, ConstraintType::terms);
+				}
+			}
+			break;
+				}
         case 3: {
 			// ITE gate
+			// TODO filter out tautological cases
             if (clause_inputs.size() != 3) {
                 invalid_ite_gate_size_error();
             }
